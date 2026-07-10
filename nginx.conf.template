@@ -1,0 +1,44 @@
+server {
+    listen ${PORT};
+    server_name localhost;
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Ensure correct MIME type and caching for WASM files
+    location ~* \.wasm$ {
+        root /usr/share/nginx/html;
+        types {
+            application/wasm wasm;
+        }
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Access-Control-Allow-Origin "*";
+    }
+
+    # Ensure JavaScript files are served correctly
+    location ~* \.js$ {
+        root /usr/share/nginx/html;
+        types {
+            application/javascript js;
+        }
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Cache CSS and media assets
+    location ~* \.(?:css|png|jpg|jpeg|gif|svg|ico|webmanifest)$ {
+        root /usr/share/nginx/html;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Optional: COOP/COEP headers if they are needed for high-performance isolated workers later
+    # add_header Cross-Origin-Opener-Policy "same-origin";
+    # add_header Cross-Origin-Embedder-Policy "require-corp";
+
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}

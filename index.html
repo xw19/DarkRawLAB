@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🌑</text></svg>"
+    />
+    <title>DarkRaw Lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --yellow: #ffd200;
+        --bg: #111;
+        --panel: #1a1a1a;
+        --line: #2a2a2a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      /* `hidden` must beat class rules that set an explicit `display`
+         (otherwise a `.load-result{display:flex}` overrides the UA hidden). */
+      [hidden] {
+        display: none !important;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: #eee;
+        font: 14px/1.4 system-ui, sans-serif;
+        overscroll-behavior: none;
+      }
+      #app {
+        height: 100%;
+      }
+      .screen {
+        height: 100%;
+      }
+      .screen[hidden] {
+        display: none;
+      }
+
+      button,
+      .file-button {
+        font: inherit;
+        color: #eee;
+        background: #2a2a2a;
+        border: 1px solid #3a3a3a;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      button.active {
+        background: var(--yellow);
+        color: #06213f;
+        border-color: var(--yellow);
+      }
+      button.primary {
+        background: var(--yellow);
+        color: #241d00;
+        border-color: var(--yellow);
+        font-weight: 700;
+      }
+
+      /* ---------- Screen: Start ---------- */
+      .start {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .start-inner {
+        width: min(460px, 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 18px;
+      }
+      /* Nikon-style wordmark: heavy italic letters with a tapered yellow swoosh. */
+      .logo {
+        position: relative;
+        display: inline-block;
+        margin: 8px 0 0;
+        font-weight: 800;
+        font-style: italic;
+        font-size: clamp(38px, 13vw, 84px);
+        letter-spacing: -0.035em;
+        line-height: 1;
+        color: #f6f6f6;
+        padding-bottom: 0.16em;
+      }
+      .logo .lab {
+        color: #c7c7c7;
+        font-weight: 600;
+      }
+      .logo::after {
+        content: "";
+        position: absolute;
+        left: 1%;
+        right: 1%;
+        bottom: 0;
+        height: 0.15em;
+        background: var(--yellow);
+        transform: rotate(-3.5deg);
+        transform-origin: left center;
+        clip-path: polygon(0 58%, 100% 0, 100% 100%, 0 100%);
+        border-radius: 3px;
+      }
+      .tagline {
+        margin: 0;
+        opacity: 0.6;
+        font-size: 15px;
+      }
+      .file-button {
+        padding: 11px 22px;
+        font-weight: 600;
+        border-radius: 8px;
+      }
+      #file {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .error {
+        color: #ff8080;
+        margin: 0;
+      }
+      #loading {
+        width: 100%;
+      }
+      .progress-label {
+        margin: 0 0 8px;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
+      }
+      .progress {
+        width: 100%;
+        height: 8px;
+        background: #262626;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        width: 0;
+        height: 100%;
+        background: var(--yellow);
+        border-radius: 999px;
+        transition: width 0.3s ease;
+      }
+      .load-result {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+      .thumb {
+        max-width: 100%;
+        max-height: 42vh;
+        border-radius: 8px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+        background: #000;
+      }
+      .exif {
+        width: 100%;
+        margin: 0;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 6px 16px;
+        text-align: left;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px 16px;
+      }
+      .exif dt {
+        opacity: 0.55;
+      }
+      .exif dd {
+        margin: 0;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      #enhance {
+        align-self: stretch;
+        padding: 12px;
+        font-size: 15px;
+        border-radius: 8px;
+      }
+
+      /* ---------- Screen: Editor ---------- */
+      .editor {
+        display: flex;
+        flex-direction: column;
+      }
+      .editor header {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .logo-sm {
+        font-weight: 800;
+        font-style: italic;
+        letter-spacing: -0.02em;
+        font-size: 16px;
+      }
+      .logo-sm .lab {
+        color: var(--yellow);
+      }
+      .editor .spacer {
+        flex: 1;
+      }
+      #status {
+        opacity: 0.65;
+        font-variant-numeric: tabular-nums;
+        max-width: 34vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #reset-crop[hidden] {
+        display: none;
+      }
+      #stage {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        place-items: center;
+        padding: 8px;
+      }
+      #view {
+        max-width: 100%;
+        max-height: 100%;
+        background: #000;
+        border-radius: 4px;
+      }
+      #controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+        background: #191919;
+        border-top: 1px solid var(--line);
+      }
+      .control {
+        display: grid;
+        grid-template-columns: 72px 1fr 68px;
+        align-items: center;
+        gap: 12px;
+      }
+      .control label {
+        opacity: 0.8;
+      }
+      .control output {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.9;
+      }
+      .control input[type="range"] {
+        width: 100%;
+        accent-color: #6aa9ff;
+      }
+
+      /* Crop overlay */
+      .crop-window {
+        position: absolute;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+        cursor: move;
+        touch-action: none;
+      }
+      .crop-window.hidden {
+        display: none;
+      }
+      .crop-grid {
+        position: absolute;
+        background: rgba(255, 255, 255, 0.3);
+        pointer-events: none;
+      }
+      .crop-grid-v {
+        top: 0;
+        bottom: 0;
+        width: 1px;
+      }
+      .crop-grid-h {
+        left: 0;
+        right: 0;
+        height: 1px;
+      }
+      .crop-handle {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        transform: translate(-50%, -50%);
+        touch-action: none;
+      }
+      .crop-handle::after {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        background: #fff;
+        border-radius: 2px;
+        box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+      }
+      .crop-nw { left: 0; top: 0; cursor: nwse-resize; }
+      .crop-ne { left: 100%; top: 0; cursor: nesw-resize; }
+      .crop-sw { left: 0; top: 100%; cursor: nesw-resize; }
+      .crop-se { left: 100%; top: 100%; cursor: nwse-resize; }
+
+      /* ---------- Screen: Export ---------- */
+      .export {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .export-card {
+        width: min(360px, 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 22px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      .export-card h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+      .export-card .row {
+        display: grid;
+        grid-template-columns: 64px 1fr auto;
+        align-items: center;
+        gap: 12px;
+      }
+      .export-card label {
+        opacity: 0.8;
+      }
+      .export-card select {
+        font: inherit;
+        color: #eee;
+        background: #2a2a2a;
+        border: 1px solid #3a3a3a;
+        border-radius: 6px;
+        padding: 6px 8px;
+        grid-column: 2 / 4;
+      }
+      .export-card input[type="range"] {
+        width: 100%;
+        accent-color: var(--yellow);
+      }
+      .export-card output {
+        font-variant-numeric: tabular-nums;
+        min-width: 2ch;
+        text-align: right;
+      }
+      #export-status {
+        margin: 0;
+        min-height: 1.2em;
+        opacity: 0.75;
+      }
+      .export-actions {
+        display: flex;
+        gap: 10px;
+      }
+      .export-actions button {
+        flex: 1;
+        padding: 11px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <!-- ================= SCREEN 0: START ================= -->
+      <section class="screen start" data-screen="start">
+        <div class="start-inner">
+          <div class="logo">DarkRaw<span class="lab">LAB</span></div>
+          <p class="tagline">RAW editing, right in your browser.</p>
+          <label class="file-button" for="file">Choose RAW file</label>
+          <input
+            id="file"
+            type="file"
+            accept=".raw,.dng,.cr2,.cr3,.nef,.arw,.raf,.rw2,.orf,.pef,.srw,image/*"
+          />
+          <p id="start-error" class="error" hidden></p>
+
+          <div id="loading" hidden>
+            <p id="progress-label" class="progress-label"></p>
+            <div class="progress"><div id="progress-fill" class="progress-fill"></div></div>
+          </div>
+
+          <div id="load-result" class="load-result" hidden>
+            <img id="thumb" class="thumb" alt="RAW preview" />
+            <dl id="exif" class="exif"></dl>
+            <button id="enhance" class="primary">Enhance →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SCREEN 1: EDITOR ================= -->
+      <section class="screen editor" data-screen="editor" hidden>
+        <header>
+          <span class="logo-sm">DarkRaw<span class="lab">LAB</span></span>
+          <span class="spacer"></span>
+          <span id="status"></span>
+          <button id="crop-toggle">Crop</button>
+          <button id="reset-crop" hidden>Reset</button>
+          <button id="export" class="primary">Export</button>
+        </header>
+        <div id="stage">
+          <canvas id="view"></canvas>
+        </div>
+        <div id="controls">
+          <div class="control">
+            <label for="exposure">Exposure</label>
+            <input id="exposure" type="range" min="-5" max="5" step="0.1" value="0" />
+            <output id="exposure-val">0.0 EV</output>
+          </div>
+          <div class="control">
+            <label for="contrast">Contrast</label>
+            <input id="contrast" type="range" min="-100" max="100" step="1" value="0" />
+            <output id="contrast-val">0</output>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SCREEN 2: EXPORT ================= -->
+      <section class="screen export" data-screen="export" hidden>
+        <div class="export-card">
+          <h2>Export</h2>
+          <div class="row">
+            <label for="export-format">Format</label>
+            <select id="export-format">
+              <option value="jpeg">JPEG · 8-bit</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="export-quality">Quality</label>
+            <input id="export-quality" type="range" min="50" max="100" step="1" value="92" />
+            <output id="export-quality-val">92</output>
+          </div>
+          <p id="export-status"></p>
+          <div class="export-actions">
+            <button id="export-back">Back</button>
+            <button id="export-run" class="primary">Download JPEG</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

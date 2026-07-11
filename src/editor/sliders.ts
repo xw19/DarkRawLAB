@@ -62,6 +62,7 @@ export const SLIDERS: readonly SliderSpec[] = [
   // bottom of the range.
   { key: "whites", inputId: "whites", labelId: "whites-val", uniform: "u_whites", default: 0, toUniform: scale(1), format: signed },
   { key: "blacks", inputId: "blacks", labelId: "blacks-val", uniform: "u_blacks", default: 0, toUniform: scale(0.05), format: signed },
+  { key: "sharpen", inputId: "sharpen", labelId: "sharpen-val", uniform: "u_sharpen", default: 0, toUniform: scale(1.5), format: signed },
 
   // Geometry. rotation90 is button-driven and has no visible label.
   { key: "angleDeg", inputId: "rotate-slider", labelId: "rotate-val", uniform: "u_angle", default: 0, toUniform: deg2rad, format: signedDeg },

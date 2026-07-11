@@ -17,12 +17,12 @@ darktable itself is already FOSS; our differentiator is **mobile + web/WASM**, n
 
 **Implemented editing features** (all live on the GPU; see the pipeline below):
 
-- **Tone:** exposure, contrast, highlights, shadows, whites, blacks
+- **Tone:** exposure, contrast, highlights, shadows, whites, blacks, sharpen
 - **Colour:** white balance (temperature, tint), saturation, vibrance, luminance, channel mixer (3×3, the `mix*` fields → `u_mix*` matrix in `pipeline.frag`), and a per-hue **HSL mixer** (8 bands × Hue/Sat/Lum, the `hsl*` fields; the shader blends bands by hue distance)
 - **Denoise:** multi-scale luma (fine + coarse) and chroma NLM, plus film grain
 - **Geometry:** crop, free-angle straighten, 90° rotation
 - **Rendering:** optional **filmic** (ACES) display transform, on by default and **baked into export**, toggled from the menu (see the display-transform step below).
-- **View:** pinch/wheel zoom and pan, focus peaking, and a translucent RGB histogram (all view-only; never baked into the image). A slide-in drawer (`src/ui/drawer.ts`) hosts the view toggles. The histogram samples the edited image via `Renderer.sampleSmall()` (a small offscreen re-render), refreshed through `Renderer.onRender`.
+- **View:** pinch/wheel zoom and pan, focus peaking, a translucent RGB histogram, and an interactive Edit History (with checkbox toggles to bypass individual adjustments) in the slide-in drawer (`src/ui/drawer.ts`). The histogram samples the edited image via `Renderer.sampleSmall()` (a small offscreen re-render), refreshed through `Renderer.onRender`.
 - **Export:** full-resolution JPEG (quality slider) or PNG
 
 This set is the current scope. **Do not add new adjustments, presets, layers, cloud, or accounts without being asked.** New features are welcome when requested, but each one costs mobile bundle size, shader complexity, and maintenance — justify it, and update this file, the pipeline section, and the slider wiring together (see "Adding an adjustment" below).
@@ -63,20 +63,21 @@ The shader (`src/gl/shaders/pipeline.frag`) then applies operations in exactly t
 
 1. **Geometry** — free-angle rotation, then discrete 90° steps, then the crop window. Pure UV math; no pixel reprocessing. Only baked in at export.
 2. **Denoise** — multi-scale NLM on the sampled neighbourhood (fine 5×5, coarse 5×5 @ 2.5× spacing, chroma), in YCbCr. Runs first because it operates on raw sensor noise before any tonal expansion.
-3. **Exposure** — a linear multiply, `rgb *= pow(2, ev)`. Doing this before the display transform is why highlight/shadow recovery works, and the reason we decode to linear instead of editing the baked preview JPEG.
-4. **White balance** — temperature scales R up / B down; tint pivots green against magenta.
-5. **Highlights / shadows** — luminance-weighted exposure applied to the bright/dark ends (smoothstep masks around 0.18 middle grey).
-6. **Saturation / vibrance** — mix toward luminance; vibrance is saturation weighted down for already-saturated pixels.
-7. **Contrast** — tone curve pivoting around middle grey (0.18 linear): `rgb = (rgb - 0.18) * contrast + 0.18`. After exposure.
+3. **Sharpen** — Unsharp Mask (5-tap kernel) in linear space, applied right after denoise to amplify details without amplifying sensor noise.
+4. **Exposure** — a linear multiply, `rgb *= pow(2, ev)`. Doing this before the display transform is why highlight/shadow recovery works, and the reason we decode to linear instead of editing the baked preview JPEG.
+5. **White balance** — temperature scales R up / B down; tint pivots green against magenta.
+6. **Highlights / shadows** — luminance-weighted exposure applied to the bright/dark ends (smoothstep masks around 0.18 middle grey).
+7. **Saturation / vibrance** — mix toward luminance; vibrance is saturation weighted down for already-saturated pixels.
+8. **Contrast** — tone curve pivoting around middle grey (0.18 linear): `rgb = (rgb - 0.18) * contrast + 0.18`. After exposure.
 
 **Display transform:**
 
-8. **Display transform** — scene-linear → display. Either the standard piecewise sRGB OETF, or (when the **Filmic tone** toggle is on, the default) an **ACES filmic curve** (`filmicDisplay` in `pipeline.frag`) that adds contrast + highlight rolloff for a darktable-like look. Everything above is edited in linear light so it lands correctly here. Filmic is a rendering intent, not a view aid: it's baked into export (threaded through `exportImage(..., filmic)` / `Renderer.setFilmic`), unlike peaking/histogram.
+9. **Display transform** — scene-linear → display. Either the standard piecewise sRGB OETF, or (when the **Filmic tone** toggle is on, the default) an **ACES filmic curve** (`filmicDisplay` in `pipeline.frag`) that adds contrast + highlight rolloff for a darktable-like look. Everything above is edited in linear light so it lands correctly here. Filmic is a rendering intent, not a view aid: it's baked into export (threaded through `exportImage(..., filmic)` / `Renderer.setFilmic`), unlike peaking/histogram.
 
 **Output-referred (sRGB), applied after the display transform on purpose:**
 
-9. **Luminance** — HSL lightness shift; perceptual, so it operates on display-encoded values.
-10. **Film grain** — luma-weighted noise added in output space, so grain reads uniformly regardless of scene exposure.
+10. **Luminance** — HSL lightness shift; perceptual, so it operates on display-encoded values.
+11. **Film grain** — luma-weighted noise added in output space, so grain reads uniformly regardless of scene exposure.
 
 If you change the scene-referred order (2→7) you will get subtly wrong results. The two output-referred steps (9–10) are intentionally *after* sRGB encoding — that is not a bug; document it if you touch it.
 
@@ -156,7 +157,7 @@ Add the field to the `EditState` interface (`pipeline.ts`) too, so the table ent
 
 ## Roadmap & current status
 
-**CURRENT STATUS:** _All original roadmap phases (0–5) are complete **and** the editor has been extended well past the initial exposure/contrast/crop scope into a full tonal + colour + denoise + geometry tool — see "Implemented editing features" above. The scene-referred → display → output-referred pipeline is implemented in `pipeline.frag` and driven by `toUniforms()`. Export re-decodes at full resolution (the one place we don't half-size), reuses the display `Renderer` on an offscreen canvas so the baked image is pixel-identical to the preview (same shader, same uniforms), and encodes JPEG (quality slider) or PNG. Verified end-to-end on a Sony ARW: real EXIF, thumbnail, screen transitions, full-res export + back._
+**CURRENT STATUS:** _All original roadmap phases (0–5) are complete **and** the editor has been extended well past the initial exposure/contrast/crop scope into a full tonal + colour + denoise + geometry tool — see "Implemented editing features" above. The scene-referred → display → output-referred pipeline is implemented in `pipeline.frag` and driven by `toUniforms()`. Responsive layout overflow and centering issues on mobile screens (like Samsung A54) are resolved. Aspect ratio presets (Free, 1:1, 4:3, 5:4, 3:2, 16:9) with orientation-adaptive fitting and locked corner dragging are implemented. GPU-accelerated Unsharp Mask sharpening is implemented in linear space under the Tune tab. An interactive toggleable Edit History panel is added to the menu drawer, allowing users to toggle individual adjustments on/off dynamically (bypassing them in the shader preview and during exports). Export re-decodes at full resolution (the one place we don't half-size), reuses the display `Renderer` on an offscreen canvas so the baked image is pixel-identical to the preview (same shader, same uniforms), and encodes JPEG (quality slider) or PNG. Verified end-to-end on a Sony ARW: real EXIF, thumbnail, screen transitions, full-res export + back._
 
 **Delivered phases:**
 
@@ -166,11 +167,11 @@ Add the field to the `EditState` interface (`pipeline.ts`) too, so the table ent
 - **Phase 3 — Crop.** Touch-friendly overlay, applied as geometry.
 - **Phase 4 — Export.** Full-res render + encode + download.
 - **Phase 5 — Export controls.** Format (JPEG/PNG) + quality slider.
-- **Extended editing (post-roadmap).** Highlights/shadows, white balance, saturation/vibrance, luminance, multi-scale denoise + grain, straighten + 90° rotation, zoom/pan.
+- **Extended editing (post-roadmap).** Highlights/shadows, white balance, saturation/vibrance, luminance, multi-scale denoise + grain, straighten + 90° rotation, zoom/pan, crop aspect ratio presets, unsharp mask sharpening, and an interactive toggleable Edit History.
 
 **Known gaps / good next steps** (do the ones that are asked for):
 
-- **Tests cover the pure modules only.** Vitest runs `pipeline`, `crop`, and `exif` (33 tests via `npm test`); `export.ts`'s `exportName` and all GL/DOM code are still untested.
+- **Tests cover the pure modules only.** Vitest runs `pipeline`, `crop`, and `exif` (44 tests via `npm test`); `export.ts`'s `exportName` and all GL/DOM code are still untested.
 - Zoom uses a CSS transform on the view container; cropping while zoomed maps pointer coordinates through that transform, which needs verifying/fixing.
 - PWA install/offline shell (manifest + service worker), and higher-bit-depth export (16-bit PNG/TIFF) remain unbuilt.
 
@@ -201,6 +202,6 @@ The UI is a three-screen flow (`src/ui/screens.ts` toggles `[data-screen]` secti
 - Re-run the WASM decoder on slider/zoom/crop interactions.
 - Bake any adjustment into pixels for preview (it's a shader; keep it live). Baking only happens at export.
 - Decode full-res for editing (half-size; full-res only at export).
-- Reorder the scene-referred pipeline steps (denoise → exposure → WB → highlights/shadows → saturation/vibrance → contrast → display transform), or move luminance/grain *before* the display transform.
+- Reorder the scene-referred pipeline steps (denoise → sharpen → exposure → WB → highlights/shadows → saturation/vibrance → contrast → display transform), or move luminance/grain *before* the display transform.
 - Add adjustments/presets/layers/cloud/accounts beyond the current scope without being asked — and when you do add one, update every place listed in "Adding an adjustment," including this file.
 - Add heavy dependencies without justification.

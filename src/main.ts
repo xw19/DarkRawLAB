@@ -7,6 +7,7 @@
 
 import { Renderer } from "./gl/renderer";
 import { defaultEditState, toUniforms } from "./editor/pipeline";
+import { SLIDERS } from "./editor/sliders";
 import type { EditState } from "./editor/pipeline";
 import { fullCrop } from "./editor/crop";
 import type { CropRect } from "./editor/crop";
@@ -51,6 +52,7 @@ const rotateRightInput = document.querySelector<HTMLButtonElement>("#rotate-righ
 const rotation90Input = document.querySelector<HTMLInputElement>("#rotation90")!;
 const exportStatus = document.querySelector<HTMLParagraphElement>("#export-status")!;
 const exportRun = document.querySelector<HTMLButtonElement>("#export-run")!;
+const aspectBtns = document.querySelectorAll<HTMLButtonElement>("#aspect-presets .submenu-item");
 
 // One WebGL2 context for the app's lifetime; images are swapped as textures.
 const renderer = new Renderer(canvas);
@@ -120,11 +122,140 @@ histToggle.addEventListener("change", () => {
 histRow.append(histLabel, histToggle);
 drawer.content.append(histRow);
 
+// Separator and header for history list
+const historyHeader = document.createElement("div");
+historyHeader.style.cssText = "border-top: 1px solid var(--line); margin: 16px 0 8px 0; padding-top: 16px; font-weight: 700; font-size: 13px; text-transform: uppercase; color: #777; letter-spacing: 0.05em;";
+historyHeader.textContent = "Edit History";
+drawer.content.append(historyHeader);
+
+const historyContainer = document.createElement("div");
+historyContainer.id = "history-list";
+historyContainer.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
+drawer.content.append(historyContainer);
+
 // Latest edit state, tracked so export can re-apply it to the full-res decode.
 let currentEdits: EditState = defaultEditState;
+let historyList: (keyof EditState)[] = [];
+const bypassedKeys = new Set<keyof EditState>();
+let lastState: EditState | null = null;
+
+function refreshHistoryUi(): void {
+  historyContainer.innerHTML = "";
+  if (historyList.length === 0) {
+    const emptyMsg = document.createElement("div");
+    emptyMsg.style.cssText = "font-size: 13px; color: #555; font-style: italic; padding: 8px 0;";
+    emptyMsg.textContent = "No adjustments made yet.";
+    historyContainer.append(emptyMsg);
+    return;
+  }
+
+  // Display history in chronological order (most recent at bottom)
+  for (const key of historyList) {
+    const spec = SLIDERS.find((s) => s.key === key);
+    if (!spec) continue;
+
+    const row = document.createElement("label");
+    row.className = "menu-row";
+    row.style.cursor = "pointer";
+
+    const label = document.createElement("span");
+    // Resolve clean display name from DOM or HSL mapping
+    let displayName = spec.inputId;
+    const inputEl = document.getElementById(spec.inputId);
+    if (inputEl) {
+      const labelEl = document.querySelector(`label[for="${spec.inputId}"]`);
+      if (labelEl && labelEl.textContent) {
+        displayName = labelEl.textContent.trim();
+      }
+    }
+    if (spec.key.startsWith("hsl")) {
+      const match = spec.key.match(/^hsl(Hue|Sat|Lum)(Red|Orange|Yellow|Green|Aqua|Blue|Purple|Magenta)$/);
+      if (match) {
+        const [, prop, color] = match;
+        const propName = prop === "Hue" ? "Hue" : prop === "Sat" ? "Sat" : "Lum";
+        displayName = `${color} ${propName}`;
+      }
+    }
+
+    const formattedVal = spec.format ? spec.format(currentEdits[key]) : currentEdits[key].toString();
+    label.textContent = `${displayName}: ${formattedVal}`;
+    if (bypassedKeys.has(key)) {
+      label.style.textDecoration = "line-through";
+      label.style.opacity = "0.5";
+    }
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !bypassedKeys.has(key);
+    checkbox.style.cursor = "pointer";
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        bypassedKeys.delete(key);
+      } else {
+        bypassedKeys.add(key);
+      }
+      
+      // Update bypassed class on corresponding DOM input
+      const el = document.getElementById(spec.inputId);
+      if (el) {
+        const wrapper = el.closest(".tune-control-wrapper, .color-control-wrapper, .denoise-control-wrapper");
+        if (wrapper) {
+          wrapper.classList.toggle("bypassed", bypassedKeys.has(key));
+        }
+      }
+
+      renderer.setEdits(toUniforms(currentEdits, bypassedKeys));
+      refreshHistoryUi();
+    });
+
+    row.append(label, checkbox);
+    historyContainer.append(row);
+  }
+}
+
 const controls = initControls((state) => {
   currentEdits = state;
-  renderer.setEdits(toUniforms(state));
+
+  const activeKeys = SLIDERS.filter((s) => state[s.key] !== s.default).map((s) => s.key);
+  
+  // Re-enable bypassed keys if their slider value changed
+  for (const s of SLIDERS) {
+    const k = s.key;
+    if (lastState && state[k] !== lastState[k] && state[k] !== s.default) {
+      bypassedKeys.delete(k);
+    }
+  }
+
+  // Remove inactive keys
+  historyList = historyList.filter((k) => activeKeys.includes(k));
+  // Add new active keys
+  for (const k of activeKeys) {
+    if (!historyList.includes(k)) {
+      historyList.push(k);
+    }
+  }
+
+  // Remove inactive keys from bypassed set
+  for (const k of bypassedKeys) {
+    if (!activeKeys.includes(k)) {
+      bypassedKeys.delete(k);
+    }
+  }
+
+  // Update bypassed class on DOM inputs
+  for (const s of SLIDERS) {
+    const el = document.getElementById(s.inputId);
+    if (el) {
+      const wrapper = el.closest(".tune-control-wrapper, .color-control-wrapper, .denoise-control-wrapper");
+      if (wrapper) {
+        wrapper.classList.toggle("bypassed", bypassedKeys.has(s.key));
+      }
+    }
+  }
+
+  lastState = state;
+  renderer.setEdits(toUniforms(state, bypassedKeys));
+  refreshHistoryUi();
 });
 
 // Crop state: `committedCrop` is what's shown normally; the overlay edits a
@@ -170,7 +301,9 @@ const panelColor = document.querySelector<HTMLDivElement>("#panel-color")!;
 const panelMix = document.querySelector<HTMLDivElement>("#panel-mix")!;
 const panelDenoise = document.querySelector<HTMLDivElement>("#panel-denoise")!;
 
-function switchTuneParam(param: "exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks"): void {
+type TuneParam = "exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks" | "sharpen";
+
+function switchTuneParam(param: TuneParam): void {
   panelTune.dataset.activeParam = param;
   tuneSubmenuItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.param === param);
@@ -207,7 +340,7 @@ function switchDenoiseParam(param: "fine" | "coarse" | "chroma" | "grain-strengt
 
 tuneSubmenuItems.forEach((btn) => {
   btn.addEventListener("click", () => {
-    const param = btn.dataset.param as "exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks";
+    const param = btn.dataset.param as TuneParam;
     if (param) switchTuneParam(param);
   });
 });
@@ -247,6 +380,20 @@ function stepRotation(dir: number): void {
 rotateLeftInput.addEventListener("click", () => stepRotation(-1));
 rotateRightInput.addEventListener("click", () => stepRotation(1));
 
+function switchAspect(aspect: string): void {
+  overlay.setAspect(aspect);
+  aspectBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.aspect === aspect);
+  });
+}
+
+aspectBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const aspect = btn.dataset.aspect;
+    if (aspect) switchAspect(aspect);
+  });
+});
+
 tabTune.addEventListener("click", () => switchTab("tune"));
 tabCrop.addEventListener("click", () => switchTab("crop"));
 tabColor.addEventListener("click", () => switchTab("color"));
@@ -254,6 +401,7 @@ tabDenoise.addEventListener("click", () => switchTab("denoise"));
 tabMix.addEventListener("click", () => switchTab("mix"));
 resetCrop.addEventListener("click", () => {
   overlay.show(fullCrop, 0);
+  switchAspect("free");
   rotateSliderInput.value = "0";
   rotation90Input.value = "0";
   controls.refresh(); // re-read the rotate inputs → currentEdits + renderer resync
@@ -266,6 +414,10 @@ resetCrop.addEventListener("click", () => {
 function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
   currentFile = file;
   committedCrop = fullCrop;
+  switchAspect("free");
+  historyList = [];
+  bypassedKeys.clear();
+  refreshHistoryUi();
   controls.reset(); // sliders → defaults; also resyncs currentEdits + renderer
   zoomController.reset();
   renderer.setImage(image); // reuses the start-screen decode; no re-decode
@@ -304,7 +456,7 @@ async function runExport(options: ExportOptions): Promise<void> {
   const processingIndicator = document.getElementById("processing-indicator");
   if (processingIndicator) processingIndicator.classList.remove("hidden");
   try {
-    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn);
+    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn, bypassedKeys);
     exportStatus.textContent = "Saved ✓";
   } catch (err) {
     console.error(err);
@@ -380,6 +532,6 @@ window.darkraw = {
   getPreview: (maxDim = 256) => previewDataUrl(maxDim),
   export: async (options) => {
     if (!currentFile) throw new Error("No image loaded");
-    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn);
+    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn, bypassedKeys);
   },
 };

@@ -3,6 +3,8 @@ import {
   fullCrop,
   moveCrop,
   resizeCrop,
+  resizeCropLocked,
+  getCenteredCrop,
   rotateRect,
   unrotateRect,
 } from "./crop";
@@ -98,5 +100,43 @@ describe("unrotateRect", () => {
         expectRect(unrotateRect(rotateRect(rect, step), step), rect);
       }
     }
+  });
+});
+
+describe("resizeCropLocked", () => {
+  it("maintains aspect ratio when resizing SE corner", () => {
+    // 1:1 aspect ratio on a 1.5 aspect ratio image -> R = 1 / 1.5 = 2/3
+    const c: CropRect = { x: 0.1, y: 0.1, w: 0.4, h: 0.6 }; // w/h = 0.4 / 0.6 = 2/3
+    const resized = resizeCropLocked(c, "se", 0.7, 0.7, 2/3);
+    
+    // R is locked to 2/3, so w must be h * 2/3
+    expect(resized.w / resized.h).toBeCloseTo(2/3);
+    expect(resized.x).toBe(0.1);
+    expect(resized.y).toBe(0.1);
+  });
+
+  it("maintains aspect ratio when resizing NW corner", () => {
+    const c: CropRect = { x: 0.2, y: 0.2, w: 0.4, h: 0.4 }; // R = 1
+    const resized = resizeCropLocked(c, "nw", 0.1, 0.15, 1.0);
+    expect(resized.w).toBeCloseTo(resized.h);
+    expect(resized.x + resized.w).toBeCloseTo(0.6);
+    expect(resized.y + resized.h).toBeCloseTo(0.6);
+  });
+});
+
+describe("getCenteredCrop", () => {
+  it("centers landscape target on landscape image correctly", () => {
+    const crop = getCenteredCrop(1.5, 1.5); // same aspect
+    expectRect(crop, { x: 0, y: 0, w: 1, h: 1 });
+  });
+
+  it("centers square target on landscape image correctly", () => {
+    const crop = getCenteredCrop(1.5, 1.0); // 1:1 on 3:2 image
+    expectRect(crop, { x: 0.166666666, y: 0.0, w: 0.666666666, h: 1.0 });
+  });
+
+  it("centers wider target on landscape image correctly", () => {
+    const crop = getCenteredCrop(1.5, 2.0); // 2:1 on 3:2 image
+    expectRect(crop, { x: 0.0, y: 0.125, w: 1.0, h: 0.75 });
   });
 });

@@ -293,6 +293,11 @@
         border-top: 1px solid var(--line);
         overflow: hidden;
       }
+      @media (min-height: 500px) {
+        #controls {
+          min-height: 280px;
+        }
+      }
       .tool-viewport {
         flex: 1;
         min-height: 0;
@@ -315,8 +320,7 @@
       }
       #controls[data-active-tab="crop"] #panel-crop {
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
       }
       #controls[data-active-tab="color"] #panel-color {
         display: flex;
@@ -329,18 +333,17 @@
       }
       
       .tune-active-control {
-        flex: 1;
+        flex: 1 0 auto;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
         width: 100%;
-        min-height: 0;
       }
       .tune-control-wrapper {
         display: none;
         width: 100%;
         flex-direction: column;
         gap: 8px;
+        margin: auto;
       }
       #panel-tune[data-active-param="exposure"] .tune-control-wrapper[data-param="exposure"] {
         display: flex;
@@ -360,20 +363,22 @@
       #panel-tune[data-active-param="blacks"] .tune-control-wrapper[data-param="blacks"] {
         display: flex;
       }
+      #panel-tune[data-active-param="sharpen"] .tune-control-wrapper[data-param="sharpen"] {
+        display: flex;
+      }
 
       .color-active-control {
-        flex: 1;
+        flex: 1 0 auto;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
         width: 100%;
-        min-height: 0;
       }
       .color-control-wrapper {
         display: none;
         width: 100%;
         flex-direction: column;
         gap: 8px;
+        margin: auto;
       }
       #panel-color[data-active-param="temp"] .color-control-wrapper[data-param="temp"] {
         display: flex;
@@ -425,18 +430,17 @@
       }
       
       .denoise-active-control {
-        flex: 1;
+        flex: 1 0 auto;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
         width: 100%;
-        min-height: 0;
       }
       .denoise-control-wrapper {
         display: none;
         width: 100%;
         flex-direction: column;
         gap: 8px;
+        margin: auto;
       }
       #panel-denoise[data-active-param="fine"] .denoise-control-wrapper[data-param="fine"] {
         display: flex;
@@ -585,6 +589,7 @@
         align-items: center;
         gap: 16px;
         padding: 0 10px;
+        margin: auto;
       }
       .crop-control-wrapper {
         display: flex;
@@ -592,6 +597,24 @@
         gap: 8px;
         text-align: left;
         width: 100%;
+      }
+      .aspect-presets {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        width: 100%;
+        padding: 4px 0;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .aspect-presets::-webkit-scrollbar {
+        display: none;
+      }
+      .tune-control-wrapper.bypassed,
+      .color-control-wrapper.bypassed,
+      .denoise-control-wrapper.bypassed {
+        opacity: 0.45;
+        transition: opacity 0.2s ease;
       }
       .crop-info-text {
         font-size: 13px;
@@ -1114,6 +1137,17 @@
                     <input id="blacks" type="range" min="-100" max="100" step="1" value="0" />
                   </div>
                 </div>
+
+                <!-- Sharpen Control -->
+                <div class="tune-control-wrapper" data-param="sharpen">
+                  <div class="control-header">
+                    <label for="sharpen">Sharpen</label>
+                    <output id="sharpen-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="sharpen" type="range" min="0" max="100" step="1" value="0" />
+                  </div>
+                </div>
               </div>
 
               <!-- Slideable Submenu (Bottom) -->
@@ -1154,6 +1188,12 @@
                   </svg>
                   <span>Blacks</span>
                 </button>
+                <button type="button" class="submenu-item" data-param="sharpen">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2l10 10-10 10L2 12zM12 4.8L4.8 12l7.2 7.2 7.2-7.2L12 4.8z"/>
+                  </svg>
+                  <span>Sharpen</span>
+                </button>
               </div>
             </div>
 
@@ -1186,6 +1226,21 @@
                   </div>
                   <div class="slider-wrapper">
                     <input id="rotate-slider" type="range" min="-45" max="45" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Aspect Ratio Presets -->
+                <div class="crop-control-wrapper">
+                  <div class="control-header">
+                    <label>Aspect Ratio</label>
+                  </div>
+                  <div class="aspect-presets" id="aspect-presets">
+                    <button type="button" class="submenu-item active" data-aspect="free">Free</button>
+                    <button type="button" class="submenu-item" data-aspect="1:1">1:1</button>
+                    <button type="button" class="submenu-item" data-aspect="4:3">4:3</button>
+                    <button type="button" class="submenu-item" data-aspect="5:4">5:4</button>
+                    <button type="button" class="submenu-item" data-aspect="3:2">3:2</button>
+                    <button type="button" class="submenu-item" data-aspect="16:9">16:9</button>
                   </div>
                 </div>
 

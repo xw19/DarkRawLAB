@@ -66,6 +66,94 @@ export function resizeCrop(
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
 
+/**
+ * Drag `corner` to normalised point (px,py) keeping a locked ratio of normalised
+ * width to normalised height `R` (where R = targetPixelAspect / imagePixelAspect).
+ * Opposed corner stays fixed; the rect is clamped to the bounds and MIN_SIZE.
+ */
+export function resizeCropLocked(
+  c: CropRect,
+  corner: Corner,
+  px: number,
+  py: number,
+  R: number,
+): CropRect {
+  px = clamp(px, 0, 1);
+  py = clamp(py, 0, 1);
+
+  // Opposite corner coordinates
+  let fx = 0;
+  let fy = 0;
+  let wMax = 0;
+  let hMax = 0;
+
+  if (corner === "nw") {
+    fx = c.x + c.w;
+    fy = c.y + c.h;
+    wMax = fx;
+    hMax = fy;
+  } else if (corner === "ne") {
+    fx = c.x;
+    fy = c.y + c.h;
+    wMax = 1.0 - fx;
+    hMax = fy;
+  } else if (corner === "sw") {
+    fx = c.x + c.w;
+    fy = c.y;
+    wMax = fx;
+    hMax = 1.0 - fy;
+  } else if (corner === "se") {
+    fx = c.x;
+    fy = c.y;
+    wMax = 1.0 - fx;
+    hMax = 1.0 - fy;
+  }
+
+  const wRaw = Math.abs(px - fx);
+  const hRaw = Math.abs(py - fy);
+
+  // Orthogonal projection factor onto the aspect ratio line
+  let t = (wRaw * R + hRaw) / (R * R + 1);
+
+  // Clamp t to bounds and minimum size constraints
+  const maxT = Math.min(wMax / R, hMax);
+  const minT = Math.max(MIN_SIZE / R, MIN_SIZE);
+  t = clamp(t, minT, maxT);
+
+  const w = t * R;
+  const h = t;
+
+  const left = corner === "nw" || corner === "sw" ? fx - w : fx;
+  const top = corner === "nw" || corner === "ne" ? fy - h : fy;
+
+  return {
+    x: clamp(left, 0, 1),
+    y: clamp(top, 0, 1),
+    w: clamp(w, MIN_SIZE, 1),
+    h: clamp(h, MIN_SIZE, 1),
+  };
+}
+
+/** Center a crop rectangle of `targetRatio` aspect ratio within the original [0,1] image bounds. */
+export function getCenteredCrop(imgAspect: number, targetRatio: number): CropRect {
+  const R = targetRatio / imgAspect;
+  let w = 1.0;
+  let h = 1.0;
+  if (R > 1.0) {
+    w = 1.0;
+    h = 1.0 / R;
+  } else {
+    h = 1.0;
+    w = R;
+  }
+  return {
+    x: (1.0 - w) / 2,
+    y: (1.0 - h) / 2,
+    w,
+    h,
+  };
+}
+
 /** Rotate a CropRect by 90-degree increments (0 = 0, 1 = 90 CW, 2 = 180, 3 = 270 CW). */
 export function rotateRect(c: CropRect, r: number): CropRect {
   r = (r % 4 + 4) % 4; // normalized to [0, 3]

@@ -33,6 +33,7 @@ uniform float u_highlights; // highlights adjustment, stops (0.0 = no change)
 uniform float u_shadows;    // shadows adjustment, stops (0.0 = no change)
 uniform float u_whites;     // whites gain on the brightest tones, stops (0.0 = no change)
 uniform float u_blacks;     // blacks lift/crush of the darkest tones, linear offset (0.0 = no change)
+uniform float u_sharpen;    // sharpen strength (0.0 = no change)
 uniform float u_angle;      // rotation angle in radians (0.0 = no change)
 uniform float u_aspect;     // aspect ratio of the canvas (width / height)
 uniform int u_rotation90;   // discrete 90-degree rotation step (0, 1, 2, 3)
@@ -324,6 +325,18 @@ void main() {
   //    tonal expansion, so we filter the noise floor instead of amplifying it.
   if (u_denoiseFine > 0.0 || u_denoiseCoarse > 0.0 || u_denoiseChroma > 0.0) {
     c = applyDenoise(uv, c);
+  }
+
+  // Sharpening — Unsharp Mask in linear space
+  if (u_sharpen > 0.0) {
+    vec2 texel = 1.0 / vec2(textureSize(u_image, 0));
+    vec3 nN = texture(u_image, uv + vec2(0.0, texel.y)).rgb;
+    vec3 nS = texture(u_image, uv - vec2(0.0, texel.y)).rgb;
+    vec3 nE = texture(u_image, uv + vec2(texel.x, 0.0)).rgb;
+    vec3 nW = texture(u_image, uv - vec2(texel.x, 0.0)).rgb;
+    vec3 mean = (nN + nS + nE + nW) * 0.25;
+    c += u_sharpen * (c - mean);
+    c = max(vec3(0.0), c);
   }
 
   // 3. Exposure — a plain multiply in linear light. Doing this BEFORE the

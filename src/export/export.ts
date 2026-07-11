@@ -37,6 +37,7 @@ export async function exportImage(
   crop: CropRect,
   options: ExportOptions,
   filmic: boolean,
+  bypassedKeys?: Set<string> | Set<keyof EditState>,
 ): Promise<void> {
   const bytes = await file.arrayBuffer();
   const image = await decodeRaw(bytes, { halfSize: false });
@@ -49,7 +50,7 @@ export async function exportImage(
   const renderer = new Renderer(canvas, { preserveDrawingBuffer: true });
   try {
     renderer.setImage(image);
-    renderer.setEdits(toUniforms(edits));
+    renderer.setEdits(toUniforms(edits, bypassedKeys));
     renderer.setCrop(crop);
     renderer.setFilmic(filmic); // match the preview's display transform
     const blob = await canvasToBlob(canvas, options);

@@ -70,6 +70,8 @@ export interface EditState {
   grainStrength: number;
   /** Film grain size, 1..10. */
   grainSize: number;
+  /** Sharpen strength, 0..100. */
+  sharpen: number;
 }
 
 /** No-op edit state, built from each slider's declared default. */
@@ -136,17 +138,18 @@ export interface PipelineUniforms {
   u_grainStrength: number;
   /** Film grain pixel scale. */
   u_grainSize: number;
+  /** Sharpen strength multiplier. */
+  u_sharpen: number;
 }
 
-/**
- * Map edit state to shader uniforms. Pure — no GL, no DOM. Each slider's
- * UI→uniform mapping is declared in the SLIDERS table (./sliders.ts); this just
- * applies them, so there's no per-field list to keep in sync here.
- */
-export function toUniforms(state: EditState): PipelineUniforms {
+export function toUniforms(
+  state: EditState,
+  bypassedKeys?: Set<keyof EditState> | Set<string>,
+): PipelineUniforms {
   const u = {} as Record<keyof PipelineUniforms, number>;
   for (const s of SLIDERS) {
-    u[s.uniform] = s.toUniform(state[s.key]);
+    const isBypassed = bypassedKeys && bypassedKeys.has(s.key);
+    u[s.uniform] = s.toUniform(isBypassed ? s.default : state[s.key]);
   }
   return u as PipelineUniforms;
 }

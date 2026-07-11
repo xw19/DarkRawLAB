@@ -6,7 +6,7 @@
 // CLAUDE.md). It only edits the CropRect — the actual crop is applied by the
 // renderer when the caller commits. All geometry math lives in editor/crop.ts.
 
-import { fullCrop, moveCrop, resizeCrop, rotateRect, unrotateRect } from "../editor/crop";
+import { fullCrop, moveCrop, resizeCrop, resizeCropLocked, getCenteredCrop, rotateRect, unrotateRect } from "../editor/crop";
 import type { CropRect, Corner } from "../editor/crop";
 
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
@@ -28,6 +28,7 @@ export class CropOverlay {
   private drag: Drag | null = null;
   private visible = false;
   private rotation90 = 0;
+  private targetAspect: number | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -79,16 +80,46 @@ export class CropOverlay {
   }
 
   show(crop: CropRect, rotation90 = 0): void {
+    const rotChanged = (this.rotation90 - rotation90) % 2 !== 0;
     this.cropRect = crop;
     this.rotation90 = rotation90;
     this.visible = true;
     this.windowEl.classList.remove("hidden");
+
+    if (rotChanged && this.targetAspect !== null) {
+      this.targetAspect = 1.0 / this.targetAspect;
+    }
+
     this.layout();
   }
 
   hide(): void {
     this.visible = false;
     this.windowEl.classList.add("hidden");
+  }
+
+  setAspect(aspect: string): void {
+    if (aspect === "free") {
+      this.targetAspect = null;
+    } else {
+      const parts = aspect.split(":");
+      const w = parseFloat(parts[0] ?? "1");
+      const h = parseFloat(parts[1] ?? "1");
+      this.targetAspect = w / h;
+
+      const imgAspect = this.canvas.width / this.canvas.height;
+      let ratio = this.targetAspect;
+      // Adapt aspect ratio to match the orientation of the image
+      if ((imgAspect > 1.0 && ratio < 1.0) || (imgAspect < 1.0 && ratio > 1.0)) {
+        ratio = 1.0 / ratio;
+      }
+      this.targetAspect = ratio;
+
+      const cropRotated = getCenteredCrop(imgAspect, ratio);
+      this.cropRect = unrotateRect(cropRotated, this.rotation90);
+      this.layout();
+      this.onChange(this.cropRect);
+    }
   }
 
   /** Map a pointer position to normalised image coordinates in [0,1]. */
@@ -120,10 +151,18 @@ export class CropOverlay {
     const startCropRotated = rotateRect(drag.startCrop, this.rotation90);
     
     // 2. Perform crop operation on rotated space (aligned with screen canvas)
-    const cropRotated =
-      drag.mode === "move"
-        ? moveCrop(startCropRotated, nx - drag.startNx, ny - drag.startNy)
-        : resizeCrop(startCropRotated, drag.mode, nx, ny);
+    let cropRotated;
+    if (drag.mode === "move") {
+      cropRotated = moveCrop(startCropRotated, nx - drag.startNx, ny - drag.startNy);
+    } else {
+      if (this.targetAspect !== null) {
+        const imgAspect = this.canvas.width / this.canvas.height;
+        const R = this.targetAspect / imgAspect;
+        cropRotated = resizeCropLocked(startCropRotated, drag.mode, nx, ny, R);
+      } else {
+        cropRotated = resizeCrop(startCropRotated, drag.mode, nx, ny);
+      }
+    }
         
     // 3. Convert back to original coordinates using inverse rotation
     this.cropRect = unrotateRect(cropRotated, this.rotation90);

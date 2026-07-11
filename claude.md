@@ -157,7 +157,7 @@ Add the field to the `EditState` interface (`pipeline.ts`) too, so the table ent
 
 ## Roadmap & current status
 
-**CURRENT STATUS:** _All original roadmap phases (0–5) are complete **and** the editor has been extended well past the initial exposure/contrast/crop scope into a full tonal + colour + denoise + geometry tool — see "Implemented editing features" above. The scene-referred → display → output-referred pipeline is implemented in `pipeline.frag` and driven by `toUniforms()`. Responsive layout overflow and centering issues on mobile screens (like Samsung A54) are resolved. Aspect ratio presets (Free, 1:1, 4:3, 5:4, 3:2, 16:9) with orientation-adaptive fitting and locked corner dragging are implemented. GPU-accelerated Unsharp Mask sharpening is implemented in linear space under the Tune tab. An interactive toggleable Edit History panel is added to the menu drawer, allowing users to toggle individual adjustments on/off dynamically (bypassing them in the shader preview and during exports). Export re-decodes at full resolution (the one place we don't half-size), reuses the display `Renderer` on an offscreen canvas so the baked image is pixel-identical to the preview (same shader, same uniforms), and encodes JPEG (quality slider) or PNG. Verified end-to-end on a Sony ARW: real EXIF, thumbnail, screen transitions, full-res export + back._
+**CURRENT STATUS:** _All original roadmap phases (0–5) are complete **and** the editor has been extended well past the initial exposure/contrast/crop scope into a full tonal + colour + denoise + geometry tool — see "Implemented editing features" above. The scene-referred → display → output-referred pipeline is implemented in `pipeline.frag` and driven by `toUniforms()`. Responsive layout overflow and centering issues on mobile screens (like Samsung A54) are resolved. Aspect ratio presets (Free, 1:1, 4:3, 5:4, 3:2, 16:9) with orientation-adaptive fitting and locked corner dragging are implemented. GPU-accelerated Unsharp Mask sharpening is implemented in linear space under the Tune tab. An interactive toggleable Edit History panel is added to the menu drawer, allowing users to toggle individual adjustments on/off dynamically (bypassing them in the shader preview and during exports). Full PWA integration (webmanifest + dynamic offline Service Worker caching) has been implemented. Export re-decodes at full resolution (the one place we don't half-size), reuses the display `Renderer` on an offscreen canvas so the baked image is pixel-identical to the preview (same shader, same uniforms), and encodes JPEG (quality slider) or PNG. Verified end-to-end on a Sony ARW: real EXIF, thumbnail, screen transitions, full-res export + back._
 
 **Delivered phases:**
 
@@ -167,13 +167,13 @@ Add the field to the `EditState` interface (`pipeline.ts`) too, so the table ent
 - **Phase 3 — Crop.** Touch-friendly overlay, applied as geometry.
 - **Phase 4 — Export.** Full-res render + encode + download.
 - **Phase 5 — Export controls.** Format (JPEG/PNG) + quality slider.
-- **Extended editing (post-roadmap).** Highlights/shadows, white balance, saturation/vibrance, luminance, multi-scale denoise + grain, straighten + 90° rotation, zoom/pan, crop aspect ratio presets, unsharp mask sharpening, and an interactive toggleable Edit History.
+- **Extended editing (post-roadmap).** Highlights/shadows, white balance, saturation/vibrance, luminance, multi-scale denoise + grain, straighten + 90° rotation, zoom/pan, crop aspect ratio presets, unsharp mask sharpening, interactive toggleable Edit History, and PWA installation / offline caching support (manifest.json + Service Worker).
 
 **Known gaps / good next steps** (do the ones that are asked for):
 
 - **Tests cover the pure modules only.** Vitest runs `pipeline`, `crop`, and `exif` (44 tests via `npm test`); `export.ts`'s `exportName` and all GL/DOM code are still untested.
 - Zoom uses a CSS transform on the view container; cropping while zoomed maps pointer coordinates through that transform, which needs verifying/fixing.
-- PWA install/offline shell (manifest + service worker), and higher-bit-depth export (16-bit PNG/TIFF) remain unbuilt.
+- Higher-bit-depth export (16-bit PNG/TIFF) remains unbuilt.
 
 MIT License recorded in `LICENSE`. A GitHub Pages CI workflow exists (`.github/workflows/deploy.yml`); current deployment is **manual to Netlify** (`DarkRawLAB/dist` is the build output).
 

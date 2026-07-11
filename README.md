@@ -10,7 +10,7 @@ Inspired by [darktable](https://www.darktable.org/)'s processing-pipeline model;
 
 - **Open RAW files** — decoded in the browser via LibRaw compiled to WebAssembly, with instant EXIF and an embedded-thumbnail preview for a fast first paint.
 - **Tone** — exposure, contrast, highlights, shadows, whites, blacks.
-- **Colour** — white balance (temperature/tint), saturation, vibrance, luminance.
+- **Colour** — white balance (temperature/tint), saturation, vibrance, luminance, channel mixer, and a per-hue HSL mixer (8 color bands).
 - **Detail** — multi-scale luma + chroma denoise, and film grain.
 - **Geometry** — crop, free-angle straighten, and 90° rotation, with touch-friendly gestures.
 - **View** — pinch/wheel zoom and pan, plus focus peaking and a translucent RGB histogram from the slide-in menu (all non-destructive; never baked into the image).

@@ -20,6 +20,9 @@ import type { ExportOptions } from "./export/export";
 import { renderExif } from "./ui/exif";
 import { ZoomController } from "./ui/zoom";
 import { Drawer } from "./ui/drawer";
+import { loadRaw } from "./worker/decode";
+import type { DecodedImage, RawMeta } from "./worker/decode";
+import { serializePreset, parsePreset } from "./editor/preset";
 import { Histogram } from "./ui/histogram";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
@@ -36,7 +39,7 @@ const tabTune = document.querySelector<HTMLButtonElement>("#tab-tune")!;
 const tabCrop = document.querySelector<HTMLButtonElement>("#tab-crop")!;
 const tabColor = document.querySelector<HTMLButtonElement>("#tab-color")!;
 const tabDenoise = document.querySelector<HTMLButtonElement>("#tab-denoise")!;
-const tabInfo = document.querySelector<HTMLButtonElement>("#tab-info")!;
+const tabMix = document.querySelector<HTMLButtonElement>("#tab-mix")!;
 const controlsContainer = document.querySelector<HTMLDivElement>("#controls")!;
 const resetCrop = document.querySelector<HTMLButtonElement>("#reset-crop")!;
 const exportBtn = document.querySelector<HTMLButtonElement>("#export")!;
@@ -144,9 +147,9 @@ function exitCropMode(): void {
   renderer.setCrop(committedCrop);
 }
 
-function switchTab(tab: "tune" | "crop" | "color" | "denoise" | "info"): void {
+function switchTab(tab: "tune" | "crop" | "color" | "denoise" | "mix"): void {
   controlsContainer.dataset.activeTab = tab;
-  for (const btn of [tabTune, tabCrop, tabColor, tabDenoise, tabInfo]) {
+  for (const btn of [tabTune, tabCrop, tabColor, tabDenoise, tabMix]) {
     btn.classList.toggle("active", btn.id === `tab-${tab}`);
   }
   // Auto crop toggle: enter crop mode only when selecting Crop tab; commit & exit
@@ -160,9 +163,11 @@ function switchTab(tab: "tune" | "crop" | "color" | "denoise" | "info"): void {
 
 const tuneSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-tune .submenu-item");
 const colorSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-color .submenu-item");
+const mixSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-mix .submenu-item");
 const denoiseSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-denoise .submenu-item");
 const panelTune = document.querySelector<HTMLDivElement>("#panel-tune")!;
 const panelColor = document.querySelector<HTMLDivElement>("#panel-color")!;
+const panelMix = document.querySelector<HTMLDivElement>("#panel-mix")!;
 const panelDenoise = document.querySelector<HTMLDivElement>("#panel-denoise")!;
 
 function switchTuneParam(param: "exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks"): void {
@@ -172,9 +177,23 @@ function switchTuneParam(param: "exposure" | "contrast" | "highlights" | "shadow
   });
 }
 
-function switchColorParam(param: "temp" | "tint" | "saturation" | "vibrance" | "luminance"): void {
+type ColorParam = "temp" | "tint" | "saturation" | "vibrance" | "luminance";
+
+type MixParam =
+  | "mixR" | "mixG" | "mixB"
+  | "hslRed" | "hslOrange" | "hslYellow" | "hslGreen"
+  | "hslAqua" | "hslBlue" | "hslPurple" | "hslMagenta";
+
+function switchColorParam(param: ColorParam): void {
   panelColor.dataset.activeParam = param;
   colorSubmenuItems.forEach((item) => {
+    item.classList.toggle("active", item.dataset.param === param);
+  });
+}
+
+function switchMixParam(param: MixParam): void {
+  panelMix.dataset.activeParam = param;
+  mixSubmenuItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.param === param);
   });
 }
@@ -195,8 +214,15 @@ tuneSubmenuItems.forEach((btn) => {
 
 colorSubmenuItems.forEach((btn) => {
   btn.addEventListener("click", () => {
-    const param = btn.dataset.param as "temp" | "tint" | "saturation" | "vibrance" | "luminance";
+    const param = btn.dataset.param as ColorParam;
     if (param) switchColorParam(param);
+  });
+});
+
+mixSubmenuItems.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const param = btn.dataset.param as MixParam;
+    if (param) switchMixParam(param);
   });
 });
 
@@ -225,7 +251,7 @@ tabTune.addEventListener("click", () => switchTab("tune"));
 tabCrop.addEventListener("click", () => switchTab("crop"));
 tabColor.addEventListener("click", () => switchTab("color"));
 tabDenoise.addEventListener("click", () => switchTab("denoise"));
-tabInfo.addEventListener("click", () => switchTab("info"));
+tabMix.addEventListener("click", () => switchTab("mix"));
 resetCrop.addEventListener("click", () => {
   overlay.show(fullCrop, 0);
   rotateSliderInput.value = "0";
@@ -235,28 +261,28 @@ resetCrop.addEventListener("click", () => {
 });
 
 // ---- Start screen → Editor -------------------------------------------------
-initStartScreen({
-  onEnhance: (file, image, meta) => {
-    currentFile = file;
-    committedCrop = fullCrop;
-    controls.reset(); // sliders → defaults; also resyncs currentEdits + renderer
-    zoomController.reset();
-    renderer.setImage(image); // reuses the start-screen decode; no re-decode
-    statusEl.textContent = file.name;
-    
-    // Render metadata to the editor EXIF pane
-    const editorExif = document.querySelector<HTMLElement>("#editor-exif");
-    if (editorExif) {
-      renderExif(editorExif, meta);
-    }
-    
-    switchTuneParam("exposure");
-    switchColorParam("temp");
-    switchDenoiseParam("fine");
-    switchTab("tune");
-    showScreen("editor");
-  },
-});
+/** Load a decoded image into the editor and show it. Shared by the Enhance
+ *  button and the automation API (window.darkraw.loadRaw). */
+function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
+  currentFile = file;
+  committedCrop = fullCrop;
+  controls.reset(); // sliders → defaults; also resyncs currentEdits + renderer
+  zoomController.reset();
+  renderer.setImage(image); // reuses the start-screen decode; no re-decode
+  statusEl.textContent = file.name;
+
+  const editorExif = document.querySelector<HTMLElement>("#editor-exif");
+  if (editorExif) renderExif(editorExif, meta);
+
+  switchTuneParam("exposure");
+  switchColorParam("temp");
+  switchMixParam("mixR");
+  switchDenoiseParam("fine");
+  switchTab("tune");
+  showScreen("editor");
+}
+
+initStartScreen({ onEnhance: enterEditor });
 
 // ---- Editor → Export screen ------------------------------------------------
 exportBtn.addEventListener("click", () => {
@@ -288,3 +314,72 @@ async function runExport(options: ExportOptions): Promise<void> {
     if (processingIndicator) processingIndicator.classList.add("hidden");
   }
 }
+
+// ---- Automation API (window.darkraw) ---------------------------------------
+// A small programmatic surface over the editor for presets and headless
+// automation (see docs/mcp-design.md). It reuses the exact UI code paths, so
+// there's no second pipeline. Also handy for the `verify` skill and preset
+// save/load.
+
+/** Build a PNG data URL of the current (edited, cropped) preview. */
+function previewDataUrl(maxDim: number): string | null {
+  const s = renderer.sampleSmall(maxDim);
+  if (!s) return null;
+  const c = document.createElement("canvas");
+  c.width = s.width;
+  c.height = s.height;
+  const ctx = c.getContext("2d");
+  if (!ctx) return null;
+  const img = ctx.createImageData(s.width, s.height);
+  // sampleSmall reads bottom-up (WebGL origin); flip rows to top-down.
+  const row = s.width * 4;
+  for (let y = 0; y < s.height; y++) {
+    const src = (s.height - 1 - y) * row;
+    img.data.set(s.pixels.subarray(src, src + row), y * row);
+  }
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL("image/png");
+}
+
+interface DarkrawApi {
+  getState(): { editState: EditState; crop: CropRect };
+  getPreset(): string;
+  applyEdits(editState: EditState): void;
+  setCrop(crop: CropRect): void;
+  loadPreset(json: string): void;
+  loadRaw(bytes: ArrayBuffer, name?: string): Promise<RawMeta>;
+  getPreview(maxDim?: number): string | null;
+  export(options: ExportOptions): Promise<void>;
+}
+
+declare global {
+  interface Window {
+    darkraw: DarkrawApi;
+  }
+}
+
+window.darkraw = {
+  getState: () => ({ editState: currentEdits, crop: committedCrop }),
+  getPreset: () => serializePreset(currentEdits, committedCrop),
+  applyEdits: (editState) => controls.setState(editState),
+  setCrop: (crop) => {
+    committedCrop = crop;
+    renderer.setCrop(crop);
+  },
+  loadPreset: (json) => {
+    const p = parsePreset(json);
+    controls.setState(p.editState);
+    committedCrop = p.crop;
+    renderer.setCrop(p.crop);
+  },
+  loadRaw: async (bytes, name = "image.raw") => {
+    const loaded = await loadRaw(bytes);
+    enterEditor(new File([bytes], name), loaded.image, loaded.meta);
+    return loaded.meta;
+  },
+  getPreview: (maxDim = 256) => previewDataUrl(maxDim),
+  export: async (options) => {
+    if (!currentFile) throw new Error("No image loaded");
+    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn);
+  },
+};

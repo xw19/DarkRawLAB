@@ -41,6 +41,25 @@ export interface EditState {
   vibrance: number;
   /** Luminance shift, -100..+100. 0 = no change. */
   luminance: number;
+  // Channel mixer (%), a 3×3 matrix. Identity = diagonal 100, off-diagonal 0.
+  mixRR: number;
+  mixRG: number;
+  mixRB: number;
+  mixGR: number;
+  mixGG: number;
+  mixGB: number;
+  mixBR: number;
+  mixBG: number;
+  mixBB: number;
+  // Per-hue HSL mixer: Hue/Saturation/Luminance for 8 colour bands (-100..100).
+  hslHueRed: number; hslSatRed: number; hslLumRed: number;
+  hslHueOrange: number; hslSatOrange: number; hslLumOrange: number;
+  hslHueYellow: number; hslSatYellow: number; hslLumYellow: number;
+  hslHueGreen: number; hslSatGreen: number; hslLumGreen: number;
+  hslHueAqua: number; hslSatAqua: number; hslLumAqua: number;
+  hslHueBlue: number; hslSatBlue: number; hslLumBlue: number;
+  hslHuePurple: number; hslSatPurple: number; hslLumPurple: number;
+  hslHueMagenta: number; hslSatMagenta: number; hslLumMagenta: number;
   /** Fine luma denoise, 0..100. */
   denoiseFine: number;
   /** Coarse luma denoise, 0..100. */
@@ -88,6 +107,25 @@ export interface PipelineUniforms {
   u_vibrance: number;
   /** Luminance adjustment factor. */
   u_luminance: number;
+  // Channel-mixer matrix entries as fractions (100% -> 1.0).
+  u_mixRR: number;
+  u_mixRG: number;
+  u_mixRB: number;
+  u_mixGR: number;
+  u_mixGG: number;
+  u_mixGB: number;
+  u_mixBR: number;
+  u_mixBG: number;
+  u_mixBB: number;
+  // Per-hue HSL mixer (hue in turns, sat as fraction, lum as lightness offset).
+  u_hslHueRed: number; u_hslSatRed: number; u_hslLumRed: number;
+  u_hslHueOrange: number; u_hslSatOrange: number; u_hslLumOrange: number;
+  u_hslHueYellow: number; u_hslSatYellow: number; u_hslLumYellow: number;
+  u_hslHueGreen: number; u_hslSatGreen: number; u_hslLumGreen: number;
+  u_hslHueAqua: number; u_hslSatAqua: number; u_hslLumAqua: number;
+  u_hslHueBlue: number; u_hslSatBlue: number; u_hslLumBlue: number;
+  u_hslHuePurple: number; u_hslSatPurple: number; u_hslLumPurple: number;
+  u_hslHueMagenta: number; u_hslSatMagenta: number; u_hslLumMagenta: number;
   /** Fine luma denoise threshold factor. */
   u_denoiseFine: number;
   /** Coarse luma denoise threshold factor. */

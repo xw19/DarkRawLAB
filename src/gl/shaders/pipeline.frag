@@ -41,6 +41,24 @@ uniform float u_tint;       // white balance tint shift (-0.5..0.5)
 uniform float u_saturation; // saturation adjustment (-1.0..1.0)
 uniform float u_vibrance;   // vibrance adjustment (-1.0..1.0)
 uniform float u_luminance;  // luminance adjustment (-0.5..0.5)
+uniform float u_mixRR; // channel mixer 3x3 (fractions); identity = diag 1, else 0
+uniform float u_mixRG;
+uniform float u_mixRB;
+uniform float u_mixGR;
+uniform float u_mixGG;
+uniform float u_mixGB;
+uniform float u_mixBR;
+uniform float u_mixBG;
+uniform float u_mixBB;
+// Per-hue HSL mixer: 8 bands, each Hue (turns) / Saturation (fraction) / Luminance.
+uniform float u_hslHueRed; uniform float u_hslSatRed; uniform float u_hslLumRed;
+uniform float u_hslHueOrange; uniform float u_hslSatOrange; uniform float u_hslLumOrange;
+uniform float u_hslHueYellow; uniform float u_hslSatYellow; uniform float u_hslLumYellow;
+uniform float u_hslHueGreen; uniform float u_hslSatGreen; uniform float u_hslLumGreen;
+uniform float u_hslHueAqua; uniform float u_hslSatAqua; uniform float u_hslLumAqua;
+uniform float u_hslHueBlue; uniform float u_hslSatBlue; uniform float u_hslLumBlue;
+uniform float u_hslHuePurple; uniform float u_hslSatPurple; uniform float u_hslLumPurple;
+uniform float u_hslHueMagenta; uniform float u_hslSatMagenta; uniform float u_hslLumMagenta;
 uniform float u_denoiseFine;   // fine luma denoise threshold (0.0..0.15)
 uniform float u_denoiseCoarse; // coarse luma denoise threshold (0.0..0.20)
 uniform float u_denoiseChroma; // chroma denoise threshold (0.0..0.25)
@@ -62,6 +80,10 @@ const float MIDDLE_GREY = 0.18;
 const vec3 PEAK_COLOR = vec3(1.0, 0.15, 0.15); // high-visibility red
 const float PEAK_LO = 0.05;
 const float PEAK_HI = 0.12;
+
+// Per-hue HSL mixer: how far (in hue turns) each colour band reaches; larger =
+// more overlap/cross-fade between adjacent bands.
+const float HSL_BAND_WIDTH = 0.16;
 
 // RGB to HSL conversion in GLSL
 vec3 rgb2hsl(vec3 c) {
@@ -109,6 +131,21 @@ vec3 hsl2rgb(vec3 hsl) {
     hue2rgb(p, q, h),
     hue2rgb(p, q, h - 1.0/3.0)
   );
+}
+
+// Accumulate one hue band's weighted contribution for the per-hue HSL mixer.
+// The weight falls off smoothly with distance from the band centre (on the hue
+// circle) so adjacent bands cross-fade. Kept array-free for maximum GLSL ES
+// compatibility. `pixHue`/`center` are in turns [0,1).
+void accumBand(float pixHue, float center, float hueA, float satA, float lumA,
+               inout float wSum, inout float hueShift, inout float satAdj, inout float lumShift) {
+  float d = abs(pixHue - center);
+  d = min(d, 1.0 - d); // shortest distance around the hue circle
+  float w = 1.0 - smoothstep(0.0, HSL_BAND_WIDTH, d);
+  wSum += w;
+  hueShift += w * hueA;
+  satAdj += w * satA;
+  lumShift += w * lumA;
 }
 
 // sRGB opto-electronic transfer function (linear → sRGB-encoded), the standard
@@ -306,6 +343,15 @@ void main() {
     c.b *= (1.0 + u_tint * 0.5);
   }
 
+  // Channel mixer — recombine linear RGB through a 3x3 matrix (identity = no-op),
+  // after white balance so it works on white-balanced colour. Each output channel
+  // is a weighted sum of the input R/G/B.
+  c = vec3(
+    u_mixRR * c.r + u_mixRG * c.g + u_mixRB * c.b,
+    u_mixGR * c.r + u_mixGG * c.g + u_mixGB * c.b,
+    u_mixBR * c.r + u_mixBG * c.g + u_mixBB * c.b
+  );
+
   // 5. Highlights / Shadows / Whites / Blacks — luminance-weighted tonal shaping
   //    in linear light, after white balance and before contrast. All weights use
   //    the same pre-adjustment luminance so the four controls stay independent.
@@ -367,6 +413,49 @@ void main() {
   //    rolloff). The last SCENE-referred step; the ops below are output-referred
   //    and intentionally run after it.
   vec3 srgb = (u_filmic > 0.5) ? filmicDisplay(c) : linearToSrgb(c);
+
+  // Per-hue HSL mixer — adjust Hue/Saturation/Luminance for 8 colour bands, on
+  // the display value (like the global luminance below). Each pixel's hue is
+  // weighted toward nearby band centres (smooth falloff) so adjacent bands
+  // cross-fade; the weighted adjustment is normalised by total weight. No-op
+  // (and skips the HSL round-trip) when all 24 adjustments are zero.
+  {
+    // Skip the HSL round-trip entirely unless some band is adjusted.
+    // (`active` is a reserved word in GLSL ES, hence `hslActive`.)
+    float hslActive =
+        abs(u_hslHueRed) + abs(u_hslSatRed) + abs(u_hslLumRed)
+      + abs(u_hslHueOrange) + abs(u_hslSatOrange) + abs(u_hslLumOrange)
+      + abs(u_hslHueYellow) + abs(u_hslSatYellow) + abs(u_hslLumYellow)
+      + abs(u_hslHueGreen) + abs(u_hslSatGreen) + abs(u_hslLumGreen)
+      + abs(u_hslHueAqua) + abs(u_hslSatAqua) + abs(u_hslLumAqua)
+      + abs(u_hslHueBlue) + abs(u_hslSatBlue) + abs(u_hslLumBlue)
+      + abs(u_hslHuePurple) + abs(u_hslSatPurple) + abs(u_hslLumPurple)
+      + abs(u_hslHueMagenta) + abs(u_hslSatMagenta) + abs(u_hslLumMagenta);
+    if (hslActive > 0.0) {
+      vec3 hsl = rgb2hsl(srgb);
+      float h = hsl.x;
+      float wSum = 0.0, hueShift = 0.0, satAdj = 0.0, lumShift = 0.0;
+      // Band centres on the hue circle (turns): red, orange, yellow, green,
+      // aqua, blue, purple, magenta.
+      accumBand(h, 0.0,     u_hslHueRed,     u_hslSatRed,     u_hslLumRed,     wSum, hueShift, satAdj, lumShift);
+      accumBand(h, 0.08333, u_hslHueOrange,  u_hslSatOrange,  u_hslLumOrange,  wSum, hueShift, satAdj, lumShift);
+      accumBand(h, 0.16667, u_hslHueYellow,  u_hslSatYellow,  u_hslLumYellow,  wSum, hueShift, satAdj, lumShift);
+      accumBand(h, 0.33333, u_hslHueGreen,   u_hslSatGreen,   u_hslLumGreen,   wSum, hueShift, satAdj, lumShift);
+      accumBand(h, 0.5,     u_hslHueAqua,    u_hslSatAqua,    u_hslLumAqua,    wSum, hueShift, satAdj, lumShift);
+      accumBand(h, 0.66667, u_hslHueBlue,    u_hslSatBlue,    u_hslLumBlue,    wSum, hueShift, satAdj, lumShift);
+      accumBand(h, 0.79167, u_hslHuePurple,  u_hslSatPurple,  u_hslLumPurple,  wSum, hueShift, satAdj, lumShift);
+      accumBand(h, 0.875,   u_hslHueMagenta, u_hslSatMagenta, u_hslLumMagenta, wSum, hueShift, satAdj, lumShift);
+      if (wSum > 0.0) {
+        hueShift /= wSum;
+        satAdj /= wSum;
+        lumShift /= wSum;
+        hsl.x = fract(hsl.x + hueShift);
+        hsl.y = clamp(hsl.y * (1.0 + satAdj), 0.0, 1.0);
+        hsl.z = clamp(hsl.z + lumShift, 0.0, 1.0);
+        srgb = hsl2rgb(hsl);
+      }
+    }
+  }
 
   // 9. Luminance — perceptual HSL lightness shift, applied on display-encoded
   //    values (after sRGB) so it behaves perceptually rather than in linear.

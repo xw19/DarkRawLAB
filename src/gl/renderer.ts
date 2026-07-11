@@ -57,7 +57,13 @@ export class Renderer {
     if (!gl) throw new Error("WebGL2 is not available in this browser");
     this.canvas = canvas;
     this.gl = gl;
-    this.programInfo = twgl.createProgramInfo(gl, [vertSrc, fragSrc]);
+    // Surface shader compile/link failures loudly instead of leaving a null
+    // program that only blows up at the first draw.
+    this.programInfo = twgl.createProgramInfo(gl, [vertSrc, fragSrc], {
+      errorCallback: (msg: string) => {
+        throw new Error(`DarkRaw Lab: shader failed to compile:\n${msg}`);
+      },
+    });
     // Single fullscreen triangle (cheaper than a quad; the parts outside the
     // [0,1] UV range are clipped away).
     this.quad = twgl.createBufferInfoFromArrays(gl, {

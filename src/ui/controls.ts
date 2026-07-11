@@ -12,6 +12,8 @@ export interface ControlsApi {
   refresh(): void;
   /** Reset every control to its default value, then refresh. */
   reset(): void;
+  /** Set every control from an EditState, then refresh (presets / automation). */
+  setState(state: EditState): void;
 }
 
 function requireInput(id: string): HTMLInputElement {
@@ -67,6 +69,13 @@ export function initControls(onChange: (state: EditState) => void): ControlsApi 
     reset() {
       for (const { spec, input } of bound) {
         input.value = String(spec.default);
+      }
+      update();
+    },
+    setState(state) {
+      // Range inputs clamp out-of-bounds values, so read-back stays valid.
+      for (const { spec, input } of bound) {
+        input.value = String(state[spec.key]);
       }
       update();
     },

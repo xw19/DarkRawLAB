@@ -18,7 +18,7 @@ darktable itself is already FOSS; our differentiator is **mobile + web/WASM**, n
 **Implemented editing features** (all live on the GPU; see the pipeline below):
 
 - **Tone:** exposure, contrast, highlights, shadows, whites, blacks
-- **Colour:** white balance (temperature, tint), saturation, vibrance, luminance
+- **Colour:** white balance (temperature, tint), saturation, vibrance, luminance, channel mixer (3×3, the `mix*` fields → `u_mix*` matrix in `pipeline.frag`), and a per-hue **HSL mixer** (8 bands × Hue/Sat/Lum, the `hsl*` fields; the shader blends bands by hue distance)
 - **Denoise:** multi-scale luma (fine + coarse) and chroma NLM, plus film grain
 - **Geometry:** crop, free-angle straighten, 90° rotation
 - **Rendering:** optional **filmic** (ACES) display transform, on by default and **baked into export**, toggled from the menu (see the display-transform step below).
@@ -112,7 +112,8 @@ DarkRawLAB/
       sliders.ts          # SLIDERS: single source of truth for every adjustment control
       pipeline.ts         # EditState + defaults + toUniforms(), derived from SLIDERS (pure, testable)
       crop.ts             # crop + 90° rotation geometry (pure, testable)
-      *.test.ts           # Vitest unit tests (pipeline, crop, exif)
+      preset.ts           # serialize/parse {editState, crop} JSON — the "edit recipe" (pure, testable)
+      *.test.ts           # Vitest unit tests (pipeline, crop, exif, preset)
     ui/
       controls.ts         # wires the adjustment sliders → EditState
       cropOverlay.ts      # draggable crop rectangle (Pointer Events)
@@ -129,6 +130,8 @@ DarkRawLAB/
 ```
 
 Keep decode, render, edit-state, and UI in separate modules. Edit state is plain data (`EditState` — numbers + a crop rect) that maps to shader uniforms; that separation is what keeps edits real-time and the pure modules testable without a GPU.
+
+**Automation / agents:** `main.ts` exposes a `window.darkraw` hook (getState/applyEdits/setCrop/loadPreset/loadRaw/getPreview/export) reusing the UI code paths — the basis for presets and a future MCP server. See [`docs/mcp-design.md`](docs/mcp-design.md); `EditState`+crop is the serializable "edit recipe" (`preset.ts`), and `SLIDERS` is the machine-readable control catalog.
 
 ---
 
@@ -178,7 +181,7 @@ MIT License recorded in `LICENSE`. A GitHub Pages CI workflow exists (`.github/w
 The UI is a three-screen flow (`src/ui/screens.ts` toggles `[data-screen]` sections via the `hidden` attribute):
 
 1. **Start** (`src/ui/startScreen.ts`) — DarkRawLAB wordmark; pick a RAW → progress bar → `loadRaw()` (one `open`: half-size linear image **+** EXIF **+** embedded JPEG thumbnail) → thumbnail + EXIF panel (`src/ui/exif.ts`) → **Enhance**. The half-size decode is handed to the editor as-is — **Enhance does not re-decode**.
-2. **Editor** — canvas + a tabbed control bar: **Tune** (exposure/contrast/highlights/shadows), **Crop** (straighten + 90° + crop overlay), **Color** (temp/tint/saturation/vibrance/luminance), **Denoise** (fine/coarse/chroma + grain), **Info** (EXIF). Pinch/wheel zoom + pan on the canvas. **Export** button → export screen.
+2. **Editor** — canvas + a tabbed control bar (order: **Tune** exposure/contrast/highlights/shadows/whites/blacks · **Color** temp/tint/saturation/vibrance/luminance · **Mix** channel mixer + per-hue HSL bands · **Denoise** fine/coarse/chroma + grain · **Crop** straighten + 90° + crop overlay). Each tab is a `#panel-*` with a `data-active-param` submenu. Pinch/wheel zoom + pan on the canvas; the slide-in drawer holds view toggles (filmic, focus peaking, histogram). **Export** button → export screen. (EXIF shows on the start screen; there is no Info tab.)
 3. **Export** — format (JPEG/PNG) + quality → Download / Back.
 
 `loadRaw()` lives beside `decodeRaw()` in `src/worker/decode.ts` and shares one `openSettings()`.

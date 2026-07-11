@@ -15,6 +15,11 @@ describe("SLIDERS-derived state", () => {
     "exposureEv", "contrast", "highlights", "shadows", "whites", "blacks",
     "angleDeg", "rotation90",
     "temp", "tint", "saturation", "vibrance", "luminance",
+    "mixRR", "mixRG", "mixRB", "mixGR", "mixGG", "mixGB", "mixBR", "mixBG", "mixBB",
+    "hslHueRed", "hslSatRed", "hslLumRed", "hslHueOrange", "hslSatOrange", "hslLumOrange",
+    "hslHueYellow", "hslSatYellow", "hslLumYellow", "hslHueGreen", "hslSatGreen", "hslLumGreen",
+    "hslHueAqua", "hslSatAqua", "hslLumAqua", "hslHueBlue", "hslSatBlue", "hslLumBlue",
+    "hslHuePurple", "hslSatPurple", "hslLumPurple", "hslHueMagenta", "hslSatMagenta", "hslLumMagenta",
     "denoiseFine", "denoiseCoarse", "denoiseChroma", "grainStrength", "grainSize",
   ];
 

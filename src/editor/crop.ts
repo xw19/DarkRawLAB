@@ -65,3 +65,25 @@ export function resizeCrop(
 
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
+
+/** Rotate a CropRect by 90-degree increments (0 = 0, 1 = 90 CW, 2 = 180, 3 = 270 CW). */
+export function rotateRect(c: CropRect, r: number): CropRect {
+  r = (r % 4 + 4) % 4; // normalized to [0, 3]
+  if (r === 1) { // 90 deg CW
+    return { x: 1.0 - c.y - c.h, y: c.x, w: c.h, h: c.w };
+  } else if (r === 2) { // 180 deg
+    return { x: 1.0 - c.x - c.w, y: 1.0 - c.y - c.h, w: c.w, h: c.h };
+  } else if (r === 3) { // 270 deg CW (90 CCW)
+    return { x: c.y, y: 1.0 - c.x - c.w, w: c.h, h: c.w };
+  }
+  return c;
+}
+
+/** Unrotate a CropRect to undo 90-degree increments. */
+export function unrotateRect(c: CropRect, r: number): CropRect {
+  r = (r % 4 + 4) % 4;
+  if (r === 1) return rotateRect(c, 3);
+  if (r === 2) return rotateRect(c, 2);
+  if (r === 3) return rotateRect(c, 1);
+  return c;
+}

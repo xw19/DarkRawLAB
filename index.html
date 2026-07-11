@@ -99,24 +99,10 @@
         letter-spacing: -0.035em;
         line-height: 1;
         color: #f6f6f6;
-        padding-bottom: 0.16em;
+        padding-bottom: 0.1em;
       }
       .logo .lab {
-        color: #c7c7c7;
-        font-weight: 600;
-      }
-      .logo::after {
-        content: "";
-        position: absolute;
-        left: 1%;
-        right: 1%;
-        bottom: 0;
-        height: 0.15em;
-        background: var(--yellow);
-        transform: rotate(-3.5deg);
-        transform-origin: left center;
-        clip-path: polygon(0 58%, 100% 0, 100% 100%, 0 100%);
-        border-radius: 3px;
+        color: var(--yellow);
       }
       .tagline {
         margin: 0;
@@ -206,14 +192,20 @@
       .editor {
         display: flex;
         flex-direction: column;
+        height: 100dvh;
+        overflow: hidden;
       }
       .editor header {
+        flex: 0 0 54px;
+        height: 54px;
         position: relative;
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 10px 12px;
+        padding: 0 16px;
         border-bottom: 1px solid var(--line);
+        background: #111;
+        z-index: 10;
       }
       .logo-sm {
         font-weight: 800;
@@ -230,53 +222,463 @@
       #status {
         opacity: 0.65;
         font-variant-numeric: tabular-nums;
-        max-width: 34vw;
+        max-width: 45vw;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-      #reset-crop[hidden] {
-        display: none;
+        font-size: 13px;
       }
       #stage {
         position: relative;
         flex: 1;
         min-height: 0;
-        display: grid;
-        place-items: center;
-        padding: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0a0a0a;
+        padding: 16px;
+        overflow: hidden;
+      }
+      #view-container {
+        position: relative;
+        display: inline-block;
+        max-width: 100%;
+        max-height: 100%;
+        transform-origin: center center;
+        touch-action: none;
       }
       #view {
         max-width: 100%;
         max-height: 100%;
         background: #000;
         border-radius: 4px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        display: block;
+      }
+      .reset-zoom-btn {
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(20, 20, 20, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #eee;
+        padding: 6px 14px;
+        border-radius: 16px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        z-index: 5;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      .reset-zoom-btn:hover {
+        background: rgba(30, 30, 30, 0.95);
+        border-color: rgba(255, 255, 255, 0.15);
+        transform: translateX(-50%) scale(1.05);
+      }
+      .reset-zoom-btn.hidden {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-50%) translateY(10px);
       }
       #controls {
+        flex: 0 0 30dvh;
+        height: 30dvh;
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-        background: #191919;
+        background: #141414;
         border-top: 1px solid var(--line);
+        overflow: hidden;
       }
-      .control {
-        display: grid;
-        grid-template-columns: 72px 1fr 68px;
+      .tool-viewport {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+      }
+      .tool-panel {
+        display: none;
+        height: 100%;
+        flex-direction: column;
+        padding: 16px 20px;
+        overflow-y: auto;
+      }
+      /* Active panel displays */
+      #controls[data-active-tab="tune"] #panel-tune {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 12px 20px 8px 20px;
+        gap: 8px;
+      }
+      #controls[data-active-tab="crop"] #panel-crop {
+        display: flex;
         align-items: center;
-        gap: 12px;
+        justify-content: center;
       }
-      .control label {
-        opacity: 0.8;
+      #controls[data-active-tab="info"] #panel-info {
+        display: flex;
       }
-      .control output {
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-        opacity: 0.9;
+      #controls[data-active-tab="color"] #panel-color {
+        display: flex;
       }
-      .control input[type="range"] {
+      #controls[data-active-tab="denoise"] #panel-denoise {
+        display: flex;
+      }
+      
+      .tune-active-control {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         width: 100%;
-        accent-color: #6aa9ff;
+        min-height: 0;
+      }
+      .tune-control-wrapper {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #panel-tune[data-active-param="exposure"] .tune-control-wrapper[data-param="exposure"] {
+        display: flex;
+      }
+      #panel-tune[data-active-param="contrast"] .tune-control-wrapper[data-param="contrast"] {
+        display: flex;
+      }
+      #panel-tune[data-active-param="highlights"] .tune-control-wrapper[data-param="highlights"] {
+        display: flex;
+      }
+      #panel-tune[data-active-param="shadows"] .tune-control-wrapper[data-param="shadows"] {
+        display: flex;
+      }
+      
+      .color-active-control {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 0;
+      }
+      .color-control-wrapper {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #panel-color[data-active-param="temp"] .color-control-wrapper[data-param="temp"] {
+        display: flex;
+      }
+      #panel-color[data-active-param="tint"] .color-control-wrapper[data-param="tint"] {
+        display: flex;
+      }
+      #panel-color[data-active-param="saturation"] .color-control-wrapper[data-param="saturation"] {
+        display: flex;
+      }
+      #panel-color[data-active-param="vibrance"] .color-control-wrapper[data-param="vibrance"] {
+        display: flex;
+      }
+      #panel-color[data-active-param="luminance"] .color-control-wrapper[data-param="luminance"] {
+        display: flex;
+      }
+      .color-submenu {
+        flex: 0 0 46px;
+        height: 46px;
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 4px 0 8px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .color-submenu::-webkit-scrollbar {
+        display: none;
+      }
+      
+      .denoise-active-control {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 0;
+      }
+      .denoise-control-wrapper {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #panel-denoise[data-active-param="fine"] .denoise-control-wrapper[data-param="fine"] {
+        display: flex;
+      }
+      #panel-denoise[data-active-param="coarse"] .denoise-control-wrapper[data-param="coarse"] {
+        display: flex;
+      }
+      #panel-denoise[data-active-param="chroma"] .denoise-control-wrapper[data-param="chroma"] {
+        display: flex;
+      }
+      #panel-denoise[data-active-param="grain-strength"] .denoise-control-wrapper[data-param="grain-strength"] {
+        display: flex;
+      }
+      #panel-denoise[data-active-param="grain-size"] .denoise-control-wrapper[data-param="grain-size"] {
+        display: flex;
+      }
+      .denoise-submenu {
+        flex: 0 0 46px;
+        height: 46px;
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 4px 0 8px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .denoise-submenu::-webkit-scrollbar {
+        display: none;
+      }
+      
+      .control-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+      .control-header label {
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #999;
+      }
+      .control-header output {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--yellow);
+        font-variant-numeric: tabular-nums;
+      }
+      
+      .slider-wrapper {
+        width: 100%;
+        display: flex;
+        align-items: center;
+      }
+      
+      input[type="range"] {
+        width: 100%;
+        height: 6px;
+        background: #2a2a2a;
+        border-radius: 3px;
+        outline: none;
+        margin: 0;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--yellow);
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+        transition: transform 0.1s, background-color 0.1s;
+      }
+      input[type="range"]::-webkit-slider-thumb:hover {
+        transform: scale(1.15);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border: none;
+        border-radius: 50%;
+        background: var(--yellow);
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+        transition: transform 0.1s, background-color 0.1s;
+      }
+      input[type="range"]::-moz-range-thumb:hover {
+        transform: scale(1.15);
+      }
+      
+      /* Slideable submenu styling */
+      .tune-submenu {
+        flex: 0 0 46px;
+        height: 46px;
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 4px 0 8px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .tune-submenu::-webkit-scrollbar {
+        display: none;
+      }
+      .submenu-item {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #202020;
+        border: 1px solid #2d2d2d;
+        border-radius: 16px;
+        padding: 0 14px;
+        color: #aaa;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+      }
+      .submenu-item:hover {
+        color: #fff;
+        border-color: #404040;
+      }
+      .submenu-item.active {
+        color: #111;
+        background: var(--yellow);
+        border-color: var(--yellow);
+      }
+      .submenu-item svg {
+        flex-shrink: 0;
+      }
+      
+      /* Crop controls style */
+      .crop-controls {
+        text-align: center;
+        width: 100%;
+        max-width: 320px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        padding: 0 10px;
+      }
+      .crop-control-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        text-align: left;
+        width: 100%;
+      }
+      .crop-info-text {
+        font-size: 13px;
+        color: #888;
+        line-height: 1.5;
+        margin: 0;
+      }
+      .crop-actions {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        width: 100%;
+      }
+      .rotate-actions {
+        margin-top: 4px;
+        margin-bottom: 4px;
+      }
+      .icon-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+      }
+      .tool-btn {
+        font-weight: 600;
+        font-size: 13px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        background: #2a2a2a;
+        border: 1px solid #3a3a3a;
+        color: #eee;
+        cursor: pointer;
+        transition: background-color 0.2s, border-color 0.2s;
+      }
+      .tool-btn:hover {
+        background: #3a3a3a;
+        border-color: #4a4a4a;
+      }
+      
+      /* Info (EXIF) layout */
+      .info-scroll-container {
+        width: 100%;
+        height: 100%;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .exif-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px 24px;
+        margin: 0;
+        padding: 4px 0;
+        text-align: left;
+      }
+      @media (max-width: 480px) {
+        .exif-grid {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+      }
+      .exif-grid dt {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #777;
+        margin-bottom: 2px;
+      }
+      .exif-grid dd {
+        font-size: 13px;
+        font-weight: 500;
+        color: #ddd;
+        margin: 0 0 6px 0;
+      }
+
+      /* Tabs Bar styling */
+      .tool-tabs {
+        flex: 0 0 60px;
+        height: 60px;
+        display: flex;
+        border-top: 1px solid var(--line);
+        background: #0f0f0f;
+        padding-bottom: env(safe-area-inset-bottom);
+        box-sizing: content-box;
+      }
+      .tab-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        background: transparent;
+        border: none;
+        color: #777;
+        padding: 6px 0;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 500;
+        transition: color 0.2s, background-color 0.2s;
+      }
+      .tab-btn:hover {
+        color: #ccc;
+      }
+      .tab-btn.active {
+        color: var(--yellow);
+        background: rgba(255, 210, 0, 0.04);
+      }
+      .tab-btn svg {
+        transition: transform 0.2s;
+      }
+      .tab-btn.active svg {
+        transform: scale(1.1);
       }
 
       /* Crop overlay */
@@ -387,9 +789,48 @@
         padding: 11px;
         border-radius: 8px;
       }
+      /* ---------- Global Processing Spinner ---------- */
+      .processing-spinner {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        width: 22px;
+        height: 22px;
+        z-index: 99999;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 0.15s ease;
+      }
+      .processing-spinner.hidden {
+        opacity: 0;
+      }
+      .spinner-svg {
+        animation: spin 0.8s linear infinite;
+        width: 100%;
+        height: 100%;
+      }
+      .spinner-track {
+        stroke: rgba(255, 255, 255, 0.1);
+      }
+      .spinner-head {
+        stroke: var(--yellow);
+        stroke-linecap: round;
+        transform-origin: center;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
     </style>
   </head>
   <body>
+    <!-- Small Yellow Circular Progress Indicator -->
+    <div id="processing-indicator" class="processing-spinner hidden">
+      <svg class="spinner-svg" viewBox="0 0 24 24">
+        <circle class="spinner-track" cx="12" cy="12" r="10" fill="none" stroke-width="3"></circle>
+        <circle class="spinner-head" cx="12" cy="12" r="10" fill="none" stroke-width="3" stroke-dasharray="35" stroke-dashoffset="15"></circle>
+      </svg>
+    </div>
     <div id="app">
       <!-- ================= SCREEN 0: START ================= -->
       <section class="screen start" data-screen="start">
@@ -423,23 +864,364 @@
           <span class="logo-sm">DarkRaw<span class="lab">LAB</span></span>
           <span class="spacer"></span>
           <span id="status"></span>
-          <button id="crop-toggle">Crop</button>
-          <button id="reset-crop" hidden>Reset</button>
           <button id="export" class="primary">Export</button>
         </header>
         <div id="stage">
-          <canvas id="view"></canvas>
-        </div>
-        <div id="controls">
-          <div class="control">
-            <label for="exposure">Exposure</label>
-            <input id="exposure" type="range" min="-5" max="5" step="0.1" value="0" />
-            <output id="exposure-val">0.0 EV</output>
+          <div id="view-container">
+            <canvas id="view"></canvas>
           </div>
-          <div class="control">
-            <label for="contrast">Contrast</label>
-            <input id="contrast" type="range" min="-100" max="100" step="1" value="0" />
-            <output id="contrast-val">0</output>
+          <button id="reset-zoom" class="reset-zoom-btn hidden" type="button">Reset Zoom</button>
+        </div>
+        <div id="controls" data-active-tab="tune">
+          <!-- Active Tool Panels -->
+          <div class="tool-viewport">
+            <!-- Panel 1: Tune -->
+            <div class="tool-panel" id="panel-tune" data-active-param="exposure">
+              <!-- Active Control (Top) -->
+              <div class="tune-active-control">
+                <!-- Exposure Control -->
+                <div class="tune-control-wrapper" data-param="exposure">
+                  <div class="control-header">
+                    <label for="exposure">Exposure</label>
+                    <output id="exposure-val">0.0 EV</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="exposure" type="range" min="-5" max="5" step="0.1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Contrast Control -->
+                <div class="tune-control-wrapper" data-param="contrast">
+                  <div class="control-header">
+                    <label for="contrast">Contrast</label>
+                    <output id="contrast-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="contrast" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Highlights Control -->
+                <div class="tune-control-wrapper" data-param="highlights">
+                  <div class="control-header">
+                    <label for="highlights">Highlights</label>
+                    <output id="highlights-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="highlights" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Shadows Control -->
+                <div class="tune-control-wrapper" data-param="shadows">
+                  <div class="control-header">
+                    <label for="shadows">Shadows</label>
+                    <output id="shadows-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="shadows" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Slideable Submenu (Bottom) -->
+              <div class="tune-submenu">
+                <button type="button" class="submenu-item active" data-param="exposure">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.01c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>
+                  </svg>
+                  <span>Exposure</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="contrast">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/>
+                  </svg>
+                  <span>Contrast</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="highlights">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 9c1.65 0 3 1.35 3 3s-1.35 3-3 3-3-1.35-3-3 1.35-3 3-3m0-2c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-5c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1V3c0-.55.45-1 1-1zm0 14c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1v-2c0-.55.45-1 1-1zM20 12c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1zM6 12c0 .55-.45 1-1 1H3c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1z"/>
+                  </svg>
+                  <span>Highlights</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="shadows">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8v16z"/>
+                  </svg>
+                  <span>Shadows</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Panel 2: Crop -->
+            <div class="tool-panel" id="panel-crop">
+              <div class="crop-controls">
+                <input type="hidden" id="rotation90" value="0" />
+
+                <!-- Rotation Buttons -->
+                <div class="crop-actions rotate-actions">
+                  <button id="rotate-left" class="tool-btn icon-btn" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M7.11 8.53L5.7 7.11C4.8 8.27 4.24 9.61 4.07 11h2.02c.15-.84.49-1.62 1.02-2.47zM6.09 13H4.07c.17 1.39.72 2.73 1.62 3.89l1.41-1.42c-.52-.83-.87-1.63-1.01-2.47zM18 7c-4.41 0-8 3.59-8 8v1h3l-4 4-4-4h3v-1c0-5.52 4.48-10 10-10h1.79L15.3 2.5l1.41-1.41L21.6 6l-4.89 4.89-1.41-1.41L18 7z"/>
+                    </svg>
+                    <span>Rotate CCW</span>
+                  </button>
+                  <button id="rotate-right" class="tool-btn icon-btn" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M16.89 15.47l1.41 1.41c.9-1.16 1.46-2.5 1.63-3.89h-2.02c-.14.84-.49 1.64-1.02 2.48zM17.91 11h2.02c-.17-1.39-.72-2.73-1.62-3.89l-1.41 1.42c.53.84.88 1.63 1.01 2.47zM6 7c4.41 0 8 3.59 8 8v1h-3l4 4 4-4h-3v-1c0-5.52-4.48-10-10-10H4.21L6.7 2.5 5.29 1.09 0.4 6l4.89 4.89 1.41-1.41L4 7h2z"/>
+                    </svg>
+                    <span>Rotate CW</span>
+                  </button>
+                </div>
+
+                <!-- Rotate Control -->
+                <div class="crop-control-wrapper">
+                  <div class="control-header">
+                    <label for="rotate-slider">Rotate / Straighten</label>
+                    <output id="rotate-val">0°</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="rotate-slider" type="range" min="-45" max="45" step="1" value="0" />
+                  </div>
+                </div>
+
+                <p class="crop-info-text">Drag corners on the photo above to adjust your crop area.</p>
+                <div class="crop-actions">
+                  <button id="reset-crop" class="tool-btn" type="button">Reset Crop</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 3: Color -->
+            <div class="tool-panel" id="panel-color" data-active-param="temp">
+              <!-- Active Control (Top) -->
+              <div class="color-active-control">
+                <!-- Temperature Control -->
+                <div class="color-control-wrapper" data-param="temp">
+                  <div class="control-header">
+                    <label for="temp">Temperature</label>
+                    <output id="temp-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="temp" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Tint Control -->
+                <div class="color-control-wrapper" data-param="tint">
+                  <div class="control-header">
+                    <label for="tint">Tint</label>
+                    <output id="tint-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="tint" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Saturation Control -->
+                <div class="color-control-wrapper" data-param="saturation">
+                  <div class="control-header">
+                    <label for="saturation">Saturation</label>
+                    <output id="saturation-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="saturation" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Vibrance Control -->
+                <div class="color-control-wrapper" data-param="vibrance">
+                  <div class="control-header">
+                    <label for="vibrance">Vibrance</label>
+                    <output id="vibrance-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="vibrance" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Luminance Control -->
+                <div class="color-control-wrapper" data-param="luminance">
+                  <div class="control-header">
+                    <label for="luminance">Luminance</label>
+                    <output id="luminance-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="luminance" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Slideable Submenu (Bottom) -->
+              <div class="color-submenu">
+                <button type="button" class="submenu-item active" data-param="temp">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-3-9c.55 0 1 .45 1 1v3h-2V5c0-.55.45-1 1-1z"/>
+                  </svg>
+                  <span>Temp</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="tint">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                  </svg>
+                  <span>Tint</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="saturation">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/>
+                  </svg>
+                  <span>Saturation</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="vibrance">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12.01 21.49L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01.01-.01z"/>
+                  </svg>
+                  <span>Vibrance</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="luminance">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/>
+                  </svg>
+                  <span>Luminance</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Panel 4: Denoise -->
+            <div class="tool-panel" id="panel-denoise" data-active-param="fine">
+              <!-- Active Control (Top) -->
+              <div class="denoise-active-control">
+                <!-- Fine Denoise Control -->
+                <div class="denoise-control-wrapper" data-param="fine">
+                  <div class="control-header">
+                    <label for="denoise-fine">Luma Fine Denoise</label>
+                    <output id="denoise-fine-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="denoise-fine" type="range" min="0" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Coarse Denoise Control -->
+                <div class="denoise-control-wrapper" data-param="coarse">
+                  <div class="control-header">
+                    <label for="denoise-coarse">Luma Coarse Denoise</label>
+                    <output id="denoise-coarse-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="denoise-coarse" type="range" min="0" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Chroma Denoise Control -->
+                <div class="denoise-control-wrapper" data-param="chroma">
+                  <div class="control-header">
+                    <label for="denoise-chroma">Chroma Denoise</label>
+                    <output id="denoise-chroma-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="denoise-chroma" type="range" min="0" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Grain Strength Control -->
+                <div class="denoise-control-wrapper" data-param="grain-strength">
+                  <div class="control-header">
+                    <label for="grain-strength">Grain Strength</label>
+                    <output id="grain-strength-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="grain-strength" type="range" min="0" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Grain Size Control -->
+                <div class="denoise-control-wrapper" data-param="grain-size">
+                  <div class="control-header">
+                    <label for="grain-size">Grain Size (Coarseness)</label>
+                    <output id="grain-size-val">2.0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="grain-size" type="range" min="1" max="10" step="0.5" value="2" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Slideable Submenu (Bottom) -->
+              <div class="denoise-submenu">
+                <button type="button" class="submenu-item active" data-param="fine">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                  </svg>
+                  <span>Fine</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="coarse">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/>
+                  </svg>
+                  <span>Coarse</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="chroma">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8l1.46 1.46C8.07 13.11 8 13.54 8 14c0 2.21 1.79 4 4 4s4-1.79 4-4c0-.46-.07-.89-.16-1.34l1.46 1.46c.83.43.7 1.79.7 2.88 0 3.31-2.69 6-6 6zm3.3-10.3l-1.42 1.42c-.52-.39-1.17-.62-1.88-.62-1.66 0-3 1.34-3 3 0 .71.23 1.36.62 1.88L8.2 14.8c-.73-.83-1.2-1.92-1.2-3.13 0-2.76 2.24-5 5-5 1.21 0 2.3.47 3.13 1.2z"/>
+                  </svg>
+                  <span>Chroma</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="grain-strength">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
+                  </svg>
+                  <span>Grain Str</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="grain-size">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/>
+                  </svg>
+                  <span>Grain Size</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Panel 5: Info -->
+            <div class="tool-panel" id="panel-info">
+              <div class="info-scroll-container">
+                <dl id="editor-exif" class="exif-grid"></dl>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Bar Navigation -->
+          <div class="tool-tabs">
+            <button type="button" class="tab-btn active" id="tab-tune" data-target="tune">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M3 17v2h6v-2H3zm0-12v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+              </svg>
+              <span>Tune</span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-crop" data-target="crop">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M17 15h2V7c0-1.1-.9-2-2-2H9v2h8v8zM5 17c0 1.1.9 2 2 2h8v-2H7V9H5v8zm14-2V3h-2v2H5V3H3v2H1v2h2v10H1v2h2v2h2v-2h10v2h2v-2h2v-2h-2v-2h2z"/>
+              </svg>
+              <span>Crop</span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-color" data-target="color">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.75-.39-1.04-.23-.29-.38-.67-.38-1.09 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+              </svg>
+              <span>Color</span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-denoise" data-target="denoise">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+              </svg>
+              <span>Denoise</span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-info" data-target="info">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+              </svg>
+              <span>Info</span>
+            </button>
           </div>
         </div>
       </section>
@@ -452,9 +1234,10 @@
             <label for="export-format">Format</label>
             <select id="export-format">
               <option value="jpeg">JPEG · 8-bit</option>
+              <option value="png">PNG · 8-bit</option>
             </select>
           </div>
-          <div class="row">
+          <div class="row" id="quality-row">
             <label for="export-quality">Quality</label>
             <input id="export-quality" type="range" min="50" max="100" step="1" value="92" />
             <output id="export-quality-val">92</output>
@@ -462,7 +1245,7 @@
           <p id="export-status"></p>
           <div class="export-actions">
             <button id="export-back">Back</button>
-            <button id="export-run" class="primary">Download JPEG</button>
+            <button id="export-run" class="primary">Download</button>
           </div>
         </div>
       </section>

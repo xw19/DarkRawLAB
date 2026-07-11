@@ -3,14 +3,15 @@
 
 import type { RawMeta } from "../worker/decode";
 
-/** Format a shutter time as camera-style "1/250 s" or "2 s". */
-function formatShutter(seconds: number): string | null {
+/** Format a shutter time as camera-style "1/250 s" or "2 s". Exported for tests. */
+export function formatShutter(seconds: number): string | null {
   if (!seconds || seconds <= 0) return null;
   if (seconds >= 1) return `${Number(seconds.toFixed(1))} s`;
   return `1/${Math.round(1 / seconds)} s`;
 }
 
-function formatDate(d: Date | null): string | null {
+/** Exported for tests. */
+export function formatDate(d: Date | null): string | null {
   if (!d || Number.isNaN(d.getTime()) || d.getTime() === 0) return null;
   return d.toLocaleString();
 }

@@ -19,12 +19,24 @@ export function initExportScreen({ onDownload, onBack }: ExportScreenCallbacks):
   const format = el<HTMLSelectElement>("export-format");
   const quality = el<HTMLInputElement>("export-quality");
   const qualityVal = el("export-quality-val");
+  const qualityRow = el("quality-row");
   const run = el<HTMLButtonElement>("export-run");
   const back = el<HTMLButtonElement>("export-back");
 
   quality.addEventListener("input", () => {
     qualityVal.textContent = quality.value;
   });
+
+  function updateQualityVisibility(): void {
+    if (format.value === "png") {
+      qualityRow.style.display = "none";
+    } else {
+      qualityRow.style.display = "flex";
+    }
+  }
+
+  format.addEventListener("change", updateQualityVisibility);
+  updateQualityVisibility();
 
   run.addEventListener("click", () => {
     onDownload({

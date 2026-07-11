@@ -6,7 +6,7 @@
 // CLAUDE.md). It only edits the CropRect — the actual crop is applied by the
 // renderer when the caller commits. All geometry math lives in editor/crop.ts.
 
-import { fullCrop, moveCrop, resizeCrop } from "../editor/crop";
+import { fullCrop, moveCrop, resizeCrop, rotateRect, unrotateRect } from "../editor/crop";
 import type { CropRect, Corner } from "../editor/crop";
 
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
@@ -21,20 +21,18 @@ interface Drag {
 }
 
 export class CropOverlay {
-  private readonly stage: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly onChange: (c: CropRect) => void;
   private readonly windowEl: HTMLDivElement;
   private cropRect: CropRect = fullCrop;
   private drag: Drag | null = null;
   private visible = false;
+  private rotation90 = 0;
 
   constructor(
-    stage: HTMLElement,
     canvas: HTMLCanvasElement,
     onChange: (c: CropRect) => void,
   ) {
-    this.stage = stage;
     this.canvas = canvas;
     this.onChange = onChange;
 
@@ -70,19 +68,19 @@ export class CropOverlay {
     this.windowEl.addEventListener("pointercancel", (e) => this.endDrag(e));
 
     // Keep aligned to the (letterboxed) canvas as the viewport changes.
+    this.canvas.parentElement!.appendChild(this.windowEl);
     window.addEventListener("resize", () => {
       if (this.visible) this.layout();
     });
-
-    stage.append(this.windowEl);
   }
 
   get crop(): CropRect {
     return this.cropRect;
   }
 
-  show(crop: CropRect): void {
+  show(crop: CropRect, rotation90 = 0): void {
     this.cropRect = crop;
+    this.rotation90 = rotation90;
     this.visible = true;
     this.windowEl.classList.remove("hidden");
     this.layout();
@@ -117,10 +115,19 @@ export class CropOverlay {
     if (!drag || e.pointerId !== drag.pointerId) return;
     e.preventDefault();
     const { nx, ny } = this.normalized(e);
-    this.cropRect =
+    
+    // 1. Convert start crop to rotated space
+    const startCropRotated = rotateRect(drag.startCrop, this.rotation90);
+    
+    // 2. Perform crop operation on rotated space (aligned with screen canvas)
+    const cropRotated =
       drag.mode === "move"
-        ? moveCrop(drag.startCrop, nx - drag.startNx, ny - drag.startNy)
-        : resizeCrop(drag.startCrop, drag.mode, nx, ny);
+        ? moveCrop(startCropRotated, nx - drag.startNx, ny - drag.startNy)
+        : resizeCrop(startCropRotated, drag.mode, nx, ny);
+        
+    // 3. Convert back to original coordinates using inverse rotation
+    this.cropRect = unrotateRect(cropRotated, this.rotation90);
+    
     this.layout();
     this.onChange(this.cropRect);
   }
@@ -132,15 +139,13 @@ export class CropOverlay {
     }
   }
 
-  /** Position the crop window over the canvas's displayed (letterboxed) rect. */
+  /** Position the crop window over the canvas using percentage values. */
   private layout(): void {
-    const r = this.canvas.getBoundingClientRect();
-    const s = this.stage.getBoundingClientRect();
-    const c = this.cropRect;
-    this.windowEl.style.left = `${r.left - s.left + c.x * r.width}px`;
-    this.windowEl.style.top = `${r.top - s.top + c.y * r.height}px`;
-    this.windowEl.style.width = `${c.w * r.width}px`;
-    this.windowEl.style.height = `${c.h * r.height}px`;
+    const c = rotateRect(this.cropRect, this.rotation90);
+    this.windowEl.style.left = `${c.x * 100}%`;
+    this.windowEl.style.top = `${c.y * 100}%`;
+    this.windowEl.style.width = `${c.w * 100}%`;
+    this.windowEl.style.height = `${c.h * 100}%`;
   }
 }
 

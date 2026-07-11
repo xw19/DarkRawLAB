@@ -85,8 +85,9 @@ export class Renderer {
       u_cropOrigin: [crop.x, crop.y],
       u_cropSize: [crop.w, crop.h],
     };
-    this.canvas.width = Math.max(1, Math.round(this.imageWidth * crop.w));
-    this.canvas.height = Math.max(1, Math.round(this.imageHeight * crop.h));
+    const isSwapped = this.edits.u_rotation90 === 1 || this.edits.u_rotation90 === 3;
+    this.canvas.width = Math.max(1, Math.round(isSwapped ? this.imageHeight * crop.h : this.imageWidth * crop.w));
+    this.canvas.height = Math.max(1, Math.round(isSwapped ? this.imageWidth * crop.w : this.imageHeight * crop.h));
     this.render();
   }
 
@@ -96,7 +97,15 @@ export class Renderer {
    * or re-uploads the texture.
    */
   setEdits(edits: PipelineUniforms): void {
+    const rotChanged = this.edits.u_rotation90 !== edits.u_rotation90;
     this.edits = edits;
+    if (rotChanged) {
+      const isSwapped = edits.u_rotation90 === 1 || edits.u_rotation90 === 3;
+      const cropW = this.crop.u_cropSize[0];
+      const cropH = this.crop.u_cropSize[1];
+      this.canvas.width = Math.max(1, Math.round(isSwapped ? this.imageHeight * cropH : this.imageWidth * cropW));
+      this.canvas.height = Math.max(1, Math.round(isSwapped ? this.imageWidth * cropW : this.imageHeight * cropH));
+    }
     this.render();
   }
 
@@ -109,6 +118,7 @@ export class Renderer {
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.quad);
     twgl.setUniforms(this.programInfo, {
       u_image: this.texture,
+      u_aspect: this.canvas.width / this.canvas.height,
       ...this.edits,
       ...this.crop,
     });

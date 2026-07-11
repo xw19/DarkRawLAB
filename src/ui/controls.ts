@@ -1,10 +1,20 @@
-// Slider UI. Reads the two range inputs, formats their value labels, and hands
-// a fresh EditState to the caller on every input event. It owns no state beyond
-// the DOM elements themselves — the source of truth is the inputs' values.
+// Slider UI. Wires every adjustment control declared in the SLIDERS table and
+// hands a fresh EditState to the caller on each input event. It owns no state
+// beyond the DOM elements — the source of truth is the inputs' values, and which
+// controls exist is the source of truth in editor/sliders.ts.
 
 import type { EditState } from "../editor/pipeline";
+import { SLIDERS } from "../editor/sliders";
 
-function input(id: string): HTMLInputElement {
+export interface ControlsApi {
+  /** Re-read the inputs, refresh labels, and fire onChange. Call after setting
+   *  input values programmatically instead of dispatching a synthetic event. */
+  refresh(): void;
+  /** Reset every control to its default value, then refresh. */
+  reset(): void;
+}
+
+function requireInput(id: string): HTMLInputElement {
   const el = document.getElementById(id);
   if (!(el instanceof HTMLInputElement)) {
     throw new Error(`Missing slider input #${id}`);
@@ -12,39 +22,53 @@ function input(id: string): HTMLInputElement {
   return el;
 }
 
-function label(id: string): HTMLElement {
+function requireLabel(id: string): HTMLElement {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing label #${id}`);
   return el;
 }
 
 /**
- * Wire the exposure/contrast sliders. `onChange` fires on every move with the
- * current full EditState; it also fires once at init so labels and the initial
- * render agree with the slider positions.
+ * Wire every adjustment slider. `onChange` fires on each move with the current
+ * full EditState; it also fires once at init so labels and the initial render
+ * agree with the slider positions. Returns an API for programmatic refresh/reset.
  */
-export function initControls(onChange: (state: EditState) => void): void {
-  const exposure = input("exposure");
-  const contrast = input("contrast");
-  const exposureVal = label("exposure-val");
-  const contrastVal = label("contrast-val");
+export function initControls(onChange: (state: EditState) => void): ControlsApi {
+  // Resolve each slider's input (and label, if it has a readout) exactly once.
+  const bound = SLIDERS.map((spec) => ({
+    spec,
+    input: requireInput(spec.inputId),
+    label: spec.labelId ? requireLabel(spec.labelId) : null,
+  }));
 
   function read(): EditState {
-    return {
-      exposureEv: Number(exposure.value),
-      contrast: Number(contrast.value),
-    };
+    const state = {} as Record<keyof EditState, number>;
+    for (const { spec, input } of bound) {
+      state[spec.key] = Number(input.value);
+    }
+    return state as EditState;
   }
 
   function update(): void {
     const state = read();
-    // Signed, fixed formatting so the numbers don't jitter in width as you drag.
-    exposureVal.textContent = `${state.exposureEv > 0 ? "+" : ""}${state.exposureEv.toFixed(1)} EV`;
-    contrastVal.textContent = `${state.contrast > 0 ? "+" : ""}${state.contrast}`;
+    for (const { spec, label } of bound) {
+      if (label && spec.format) label.textContent = spec.format(state[spec.key]);
+    }
     onChange(state);
   }
 
-  exposure.addEventListener("input", update);
-  contrast.addEventListener("input", update);
+  for (const { input } of bound) {
+    input.addEventListener("input", update);
+  }
   update();
+
+  return {
+    refresh: update,
+    reset() {
+      for (const { spec, input } of bound) {
+        input.value = String(spec.default);
+      }
+      update();
+    },
+  };
 }

@@ -4,7 +4,7 @@
 // the decoder.
 
 import { loadRaw } from "../worker/decode";
-import type { DecodedImage } from "../worker/decode";
+import type { DecodedImage, RawMeta } from "../worker/decode";
 import { renderExif } from "./exif";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -14,8 +14,8 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 export interface StartScreenCallbacks {
-  /** Fired when the user taps Enhance, with the already-decoded image. */
-  onEnhance: (file: File, image: DecodedImage) => void;
+  /** Fired when the user taps Enhance, with the already-decoded image and metadata. */
+  onEnhance: (file: File, image: DecodedImage, meta: RawMeta) => void;
 }
 
 export function initStartScreen({ onEnhance }: StartScreenCallbacks): void {
@@ -29,7 +29,7 @@ export function initStartScreen({ onEnhance }: StartScreenCallbacks): void {
   const enhance = el<HTMLButtonElement>("enhance");
   const errorEl = el("start-error");
 
-  let pending: { file: File; image: DecodedImage } | null = null;
+  let pending: { file: File; image: DecodedImage; meta: RawMeta } | null = null;
   let lastThumbUrl: string | null = null;
 
   fileInput.addEventListener("change", async () => {
@@ -39,6 +39,8 @@ export function initStartScreen({ onEnhance }: StartScreenCallbacks): void {
     result.hidden = true;
     errorEl.hidden = true;
     loading.hidden = false;
+    const processingIndicator = document.getElementById("processing-indicator");
+    if (processingIndicator) processingIndicator.classList.remove("hidden");
     const finish = animateProgress(progressFill, progressLabel);
 
     try {
@@ -56,7 +58,7 @@ export function initStartScreen({ onEnhance }: StartScreenCallbacks): void {
       }
 
       renderExif(exif, loaded.meta);
-      pending = { file, image: loaded.image };
+      pending = { file, image: loaded.image, meta: loaded.meta };
 
       loading.hidden = true;
       result.hidden = false;
@@ -66,11 +68,13 @@ export function initStartScreen({ onEnhance }: StartScreenCallbacks): void {
       errorEl.hidden = false;
       errorEl.textContent = `Could not read this file: ${(err as Error).message}`;
       console.error(err);
+    } finally {
+      if (processingIndicator) processingIndicator.classList.add("hidden");
     }
   });
 
   enhance.addEventListener("click", () => {
-    if (pending) onEnhance(pending.file, pending.image);
+    if (pending) onEnhance(pending.file, pending.image, pending.meta);
   });
 }
 

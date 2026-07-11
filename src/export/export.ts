@@ -13,12 +13,12 @@ import { toUniforms } from "../editor/pipeline";
 import type { EditState } from "../editor/pipeline";
 import type { CropRect } from "../editor/crop";
 
-/** Chosen output format. Only 8-bit JPEG is in scope. */
-export type ExportFormat = "jpeg";
+/** Chosen output format. JPEG and PNG are supported. */
+export type ExportFormat = "jpeg" | "png";
 
 export interface ExportOptions {
   format: ExportFormat;
-  /** JPEG quality in [0,1]. */
+  /** JPEG quality in [0,1]. Ignored for PNG. */
   quality: number;
 }
 
@@ -29,9 +29,7 @@ export const defaultExportOptions: ExportOptions = {
 
 /**
  * Decode `file` at full resolution, bake the current edits + crop into pixels,
- * encode an 8-bit JPEG (the WebGL framebuffer is RGBA8, so the output is 8 bits
- * per channel), and trigger a download. Heavy decode work stays in the libraw
- * worker; only the GL draw and encode touch the main thread.
+ * encode an 8-bit JPEG or PNG, and trigger a download.
  */
 export async function exportImage(
   file: File,
@@ -61,6 +59,7 @@ export async function exportImage(
 
 const MIME: Record<ExportFormat, string> = {
   jpeg: "image/jpeg",
+  png: "image/png",
 };
 
 function canvasToBlob(
@@ -68,11 +67,13 @@ function canvasToBlob(
   { format, quality }: ExportOptions,
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("Image encoding failed"))),
-      MIME[format],
-      quality,
-    );
+    const callback = (blob: Blob | null) =>
+      blob ? resolve(blob) : reject(new Error("Image encoding failed"));
+    if (format === "png") {
+      canvas.toBlob(callback, MIME[format]);
+    } else {
+      canvas.toBlob(callback, MIME[format], quality);
+    }
   });
 }
 
@@ -90,6 +91,7 @@ function downloadBlob(blob: Blob, filename: string): void {
 
 const EXTENSION: Record<ExportFormat, string> = {
   jpeg: "jpg",
+  png: "png",
 };
 
 /** `DSC01234.ARW` → `DSC01234-darkraw.jpg`. */

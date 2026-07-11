@@ -68,6 +68,10 @@ export interface LoadedRaw {
 function openSettings(halfSize: boolean) {
   return {
     useCameraWb: true, // camera WB so colours are neutral before our edits
+    // Use the camera colour matrix (dcraw +M). The wrapper zero-inits the params
+    // struct, which disables it (standalone LibRaw defaults it on); without it the
+    // camera→sRGB conversion is uncalibrated and Nikon files skew green/yellow.
+    useCameraMatrix: 3,
     halfSize, // downscaled for editing; full-size at export
     outputBps: 16, // 16-bit: keep decode precision for the linear pipeline
     outputColor: 1, // sRGB primaries (gamma handled separately, see gamm)

@@ -17,11 +17,12 @@ darktable itself is already FOSS; our differentiator is **mobile + web/WASM**, n
 
 **Implemented editing features** (all live on the GPU; see the pipeline below):
 
-- **Tone:** exposure, contrast, highlights, shadows
+- **Tone:** exposure, contrast, highlights, shadows, whites, blacks
 - **Colour:** white balance (temperature, tint), saturation, vibrance, luminance
 - **Denoise:** multi-scale luma (fine + coarse) and chroma NLM, plus film grain
 - **Geometry:** crop, free-angle straighten, 90° rotation
-- **View:** pinch/wheel zoom and pan (view-only; not baked into the image)
+- **Rendering:** optional **filmic** (ACES) display transform, on by default and **baked into export**, toggled from the menu (see the display-transform step below).
+- **View:** pinch/wheel zoom and pan, focus peaking, and a translucent RGB histogram (all view-only; never baked into the image). A slide-in drawer (`src/ui/drawer.ts`) hosts the view toggles. The histogram samples the edited image via `Renderer.sampleSmall()` (a small offscreen re-render), refreshed through `Renderer.onRender`.
 - **Export:** full-resolution JPEG (quality slider) or PNG
 
 This set is the current scope. **Do not add new adjustments, presets, layers, cloud, or accounts without being asked.** New features are welcome when requested, but each one costs mobile bundle size, shader complexity, and maintenance — justify it, and update this file, the pipeline section, and the slider wiring together (see "Adding an adjustment" below).
@@ -54,7 +55,7 @@ Keep the dependency count low (currently just `libraw-wasm` + `twgl.js`). Every 
 
 ## The processing pipeline (order is correctness-critical)
 
-Decode the RAW to **linear light** — no tone curve, no gamma baked in (LibRaw: `gamm:[1,1]`, `noAutoBright`, 16-bit output, camera WB, sRGB primaries). See `openSettings()` in `src/worker/decode.ts`.
+Decode the RAW to **linear light** — no tone curve, no gamma baked in (LibRaw: `gamm:[1,1]`, `noAutoBright`, 16-bit output, camera WB, **camera colour matrix** (`useCameraMatrix:3` — the wrapper zero-inits this off, which skews colours green/yellow), sRGB primaries). See `openSettings()` in `src/worker/decode.ts`.
 
 The shader (`src/gl/shaders/pipeline.frag`) then applies operations in exactly this order. The split is deliberate: **scene-referred** operations run in linear light *before* the display transform; **output-referred** operations run *after* it, in sRGB.
 
@@ -70,7 +71,7 @@ The shader (`src/gl/shaders/pipeline.frag`) then applies operations in exactly t
 
 **Display transform:**
 
-8. **Linear → sRGB** — the standard piecewise sRGB OETF. Everything above is edited in linear light so it lands correctly on an sRGB screen.
+8. **Display transform** — scene-linear → display. Either the standard piecewise sRGB OETF, or (when the **Filmic tone** toggle is on, the default) an **ACES filmic curve** (`filmicDisplay` in `pipeline.frag`) that adds contrast + highlight rolloff for a darktable-like look. Everything above is edited in linear light so it lands correctly here. Filmic is a rendering intent, not a view aid: it's baked into export (threaded through `exportImage(..., filmic)` / `Renderer.setFilmic`), unlike peaking/histogram.
 
 **Output-referred (sRGB), applied after the display transform on purpose:**
 
@@ -116,6 +117,8 @@ DarkRawLAB/
       controls.ts         # wires the adjustment sliders → EditState
       cropOverlay.ts      # draggable crop rectangle (Pointer Events)
       zoom.ts             # ZoomController: pinch/wheel zoom + pan (view transform)
+      drawer.ts           # reusable slide-in overlay drawer (hosts view toggles)
+      histogram.ts        # translucent RGB histogram overlay (view-only)
       startScreen.ts      # file pick → progress → thumbnail + EXIF → Enhance
       exportScreen.ts     # format + quality controls
       screens.ts          # start/editor/export router

@@ -19,6 +19,8 @@ import { exportImage } from "./export/export";
 import type { ExportOptions } from "./export/export";
 import { renderExif } from "./ui/exif";
 import { ZoomController } from "./ui/zoom";
+import { Drawer } from "./ui/drawer";
+import { Histogram } from "./ui/histogram";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const viewContainer = document.querySelector<HTMLDivElement>("#view-container")!;
@@ -49,6 +51,71 @@ const exportRun = document.querySelector<HTMLButtonElement>("#export-run")!;
 
 // One WebGL2 context for the app's lifetime; images are swapped as textures.
 const renderer = new Renderer(canvas);
+
+// ---- Slide-in menu drawer ---------------------------------------------------
+// Reusable overlay drawer, mounted in the editor screen (so it hides with it).
+// Swipe-to-open is scoped to the image stage, clear of the sliders.
+const editorScreen = document.querySelector<HTMLElement>('[data-screen="editor"]')!;
+const menuToggle = document.querySelector<HTMLButtonElement>("#menu-toggle")!;
+const drawer = new Drawer(editorScreen, { title: "Menu", edgeHost: stage });
+menuToggle.addEventListener("click", () => drawer.toggle());
+
+// Filmic tone — an ACES filmic display transform for a darktable-like look.
+// Unlike the view aids below, it's a rendering intent: on by default and baked
+// into the export (see runExport). `filmicOn` is the source of truth for export.
+let filmicOn = true;
+const filmicRow = document.createElement("label");
+filmicRow.className = "menu-row";
+const filmicLabel = document.createElement("span");
+filmicLabel.textContent = "Filmic tone";
+const filmicToggle = document.createElement("input");
+filmicToggle.type = "checkbox";
+filmicToggle.checked = filmicOn;
+filmicToggle.addEventListener("change", () => {
+  filmicOn = filmicToggle.checked;
+  renderer.setFilmic(filmicOn);
+});
+filmicRow.append(filmicLabel, filmicToggle);
+drawer.content.append(filmicRow);
+
+// Focus peaking — a view aid (highlights in-focus edges). Toggled here; it's a
+// preview-only overlay in the renderer and is never baked into the export.
+const peakRow = document.createElement("label");
+peakRow.className = "menu-row";
+const peakLabel = document.createElement("span");
+peakLabel.textContent = "Focus peaking";
+const peakToggle = document.createElement("input");
+peakToggle.type = "checkbox";
+peakToggle.addEventListener("change", () => renderer.setPeaking(peakToggle.checked));
+peakRow.append(peakLabel, peakToggle);
+drawer.content.append(peakRow);
+
+// Histogram — a translucent RGB histogram over the stage's corner. It resamples
+// on every render via renderer.onRender while enabled; the hook is cleared (and
+// its cost avoided) when off.
+const histogram = new Histogram(stage);
+function refreshHistogram(): void {
+  const s = renderer.sampleSmall();
+  if (s) histogram.update(s.pixels);
+}
+const histRow = document.createElement("label");
+histRow.className = "menu-row";
+const histLabel = document.createElement("span");
+histLabel.textContent = "Histogram";
+const histToggle = document.createElement("input");
+histToggle.type = "checkbox";
+histToggle.addEventListener("change", () => {
+  if (histToggle.checked) {
+    histogram.show();
+    renderer.onRender = refreshHistogram;
+    refreshHistogram(); // populate immediately, without waiting for an edit
+  } else {
+    renderer.onRender = undefined;
+    histogram.hide();
+  }
+});
+histRow.append(histLabel, histToggle);
+drawer.content.append(histRow);
 
 // Latest edit state, tracked so export can re-apply it to the full-res decode.
 let currentEdits: EditState = defaultEditState;
@@ -98,7 +165,7 @@ const panelTune = document.querySelector<HTMLDivElement>("#panel-tune")!;
 const panelColor = document.querySelector<HTMLDivElement>("#panel-color")!;
 const panelDenoise = document.querySelector<HTMLDivElement>("#panel-denoise")!;
 
-function switchTuneParam(param: "exposure" | "contrast" | "highlights" | "shadows"): void {
+function switchTuneParam(param: "exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks"): void {
   panelTune.dataset.activeParam = param;
   tuneSubmenuItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.param === param);
@@ -121,7 +188,7 @@ function switchDenoiseParam(param: "fine" | "coarse" | "chroma" | "grain-strengt
 
 tuneSubmenuItems.forEach((btn) => {
   btn.addEventListener("click", () => {
-    const param = btn.dataset.param as "exposure" | "contrast" | "highlights" | "shadows";
+    const param = btn.dataset.param as "exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks";
     if (param) switchTuneParam(param);
   });
 });
@@ -211,7 +278,7 @@ async function runExport(options: ExportOptions): Promise<void> {
   const processingIndicator = document.getElementById("processing-indicator");
   if (processingIndicator) processingIndicator.classList.remove("hidden");
   try {
-    await exportImage(currentFile, currentEdits, committedCrop, options);
+    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn);
     exportStatus.textContent = "Saved ✓";
   } catch (err) {
     console.error(err);

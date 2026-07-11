@@ -12,7 +12,8 @@ describe("SLIDERS-derived state", () => {
   // cast to their interfaces, so a dropped/misnamed descriptor wouldn't be a
   // compile error — these guard completeness at runtime.
   const EDIT_KEYS: (keyof EditState)[] = [
-    "exposureEv", "contrast", "highlights", "shadows", "angleDeg", "rotation90",
+    "exposureEv", "contrast", "highlights", "shadows", "whites", "blacks",
+    "angleDeg", "rotation90",
     "temp", "tint", "saturation", "vibrance", "luminance",
     "denoiseFine", "denoiseCoarse", "denoiseChroma", "grainStrength", "grainSize",
   ];
@@ -78,6 +79,15 @@ describe("toUniforms", () => {
       expect(toUniforms(state({ highlights: -100 })).u_highlights).toBeCloseTo(-1.5);
       expect(toUniforms(state({ shadows: 100 })).u_shadows).toBeCloseTo(1.5);
       expect(toUniforms(state({ shadows: -100 })).u_shadows).toBeCloseTo(-1.5);
+    });
+  });
+
+  describe("whites / blacks", () => {
+    it("maps whites to ±1 stop and blacks to a ±0.05 linear offset", () => {
+      expect(toUniforms(state({ whites: 100 })).u_whites).toBeCloseTo(1);
+      expect(toUniforms(state({ whites: -100 })).u_whites).toBeCloseTo(-1);
+      expect(toUniforms(state({ blacks: 100 })).u_blacks).toBeCloseTo(0.05);
+      expect(toUniforms(state({ blacks: -100 })).u_blacks).toBeCloseTo(-0.05);
     });
   });
 

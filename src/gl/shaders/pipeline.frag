@@ -31,6 +31,8 @@ uniform float u_exposure; // linear-light multiplier, 2^EV (1.0 = no change)
 uniform float u_contrast; // contrast factor around middle grey (1.0 = no change)
 uniform float u_highlights; // highlights adjustment, stops (0.0 = no change)
 uniform float u_shadows;    // shadows adjustment, stops (0.0 = no change)
+uniform float u_whites;     // whites gain on the brightest tones, stops (0.0 = no change)
+uniform float u_blacks;     // blacks lift/crush of the darkest tones, linear offset (0.0 = no change)
 uniform float u_angle;      // rotation angle in radians (0.0 = no change)
 uniform float u_aspect;     // aspect ratio of the canvas (width / height)
 uniform int u_rotation90;   // discrete 90-degree rotation step (0, 1, 2, 3)
@@ -44,6 +46,8 @@ uniform float u_denoiseCoarse; // coarse luma denoise threshold (0.0..0.20)
 uniform float u_denoiseChroma; // chroma denoise threshold (0.0..0.25)
 uniform float u_grainStrength; // film grain strength (0.0..0.10)
 uniform float u_grainSize;     // film grain size (1.0..10.0)
+uniform float u_peaking;   // focus-peaking view aid: 0 = off, 1 = on (never set at export)
+uniform float u_filmic;    // filmic tone mapping as the display transform: 0 = plain sRGB, 1 = filmic
 uniform vec2 u_cropOrigin; // top-left of the crop window in [0,1] texture space
 uniform vec2 u_cropSize; // crop window size in [0,1]; (1,1) = whole image
 out vec4 fragColor;
@@ -52,6 +56,12 @@ out vec4 fragColor;
 // anchored to a perceptual mid-tone rather than to black. ~0.18 is the standard
 // linear middle-grey reflectance.
 const float MIDDLE_GREY = 0.18;
+
+// Focus-peaking overlay: colour, and the linear-luma gradient range over which
+// the highlight ramps in (lower = more sensitive). Tune PEAK_LO/PEAK_HI to taste.
+const vec3 PEAK_COLOR = vec3(1.0, 0.15, 0.15); // high-visibility red
+const float PEAK_LO = 0.05;
+const float PEAK_HI = 0.12;
 
 // RGB to HSL conversion in GLSL
 vec3 rgb2hsl(vec3 c) {
@@ -110,6 +120,25 @@ vec3 linearToSrgb(vec3 c) {
   vec3 lo = c * 12.92;
   vec3 hi = 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055;
   return mix(lo, hi, step(0.0031308, c));
+}
+
+// Filmic tone mapping (ACES fit, Narkowicz 2015) used as an OPTIONAL display
+// transform in place of the plain sRGB curve. It maps scene-linear to a
+// display-referred image with filmic highlight rolloff and added midtone
+// contrast — closer to darktable's default look than a flat linear→sRGB.
+// FILMIC_BIAS scales the input so middle grey (~0.18 linear) lands near where
+// sRGB puts it (~0.46), i.e. it changes the contrast/rolloff, not the overall
+// brightness. The fit already outputs a display-encoded value, so callers must
+// NOT apply linearToSrgb afterwards.
+const float FILMIC_BIAS = 1.8;
+vec3 filmicDisplay(vec3 x) {
+  x *= FILMIC_BIAS;
+  const float a = 2.51;
+  const float b = 0.03;
+  const float d = 2.43;
+  const float e = 0.59;
+  const float f = 0.14;
+  return clamp((x * (a * x + b)) / (x * (d * x + e) + f), 0.0, 1.0);
 }
 
 // Convert RGB to YCbCr (standard BT.601 weights)
@@ -277,18 +306,39 @@ void main() {
     c.b *= (1.0 + u_tint * 0.5);
   }
 
-  // 5. Highlights & Shadows (Applied in linear light, after white balance and before contrast)
-  // Calculate relative luminance of the pixel
+  // 5. Highlights / Shadows / Whites / Blacks — luminance-weighted tonal shaping
+  //    in linear light, after white balance and before contrast. All weights use
+  //    the same pre-adjustment luminance so the four controls stay independent.
   float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  
-  // Highlight weight: ramp up from middle grey (0.18) to 1.0
+
+  // Highlights/shadows work the BROAD upper/lower ranges as exposure-like
+  // multipliers (in stops): highlights ramp from middle grey (0.18) up to 1.0,
+  // shadows ramp from 0.35 down to 0.0.
   float hlWeight = smoothstep(0.18, 1.0, clamp(lum, 0.18, 1.0));
-  
-  // Shadow weight: ramp down from 0.35 (just above middle grey) to 0.0
   float sdWeight = 1.0 - smoothstep(0.0, 0.35, clamp(lum, 0.0, 0.35));
-  
-  // Apply exposure-like multipliers to highlight/shadow regions
   c *= pow(2.0, u_highlights * hlWeight + u_shadows * sdWeight);
+
+  // Whites/blacks act on the EXTREME ends so they complement rather than
+  // duplicate highlights/shadows. Their masks use a PERCEPTUAL lightness (approx
+  // gamma) rather than raw linear luminance: in linear light almost all real
+  // content sits below 0.5, so a linear "whites" mask caught nothing (no visible
+  // effect) while a linear "blacks" mask reached up into the midtones (washing
+  // the image grey). Perceptual thresholds map to what the eye calls whites/blacks.
+  float pl = pow(clamp(lum, 0.0, 1.0), 1.0 / 2.2);
+
+  // Whites: gain weighted to the upper tones (perceptual 0.45→1.0, strongest near
+  // white), setting the white point. The band reaches down to the midtones so the
+  // control is responsive on ordinary images, not just blown highlights.
+  float whiteWeight = smoothstep(0.45, 1.0, pl);
+  c *= pow(2.0, u_whites * whiteWeight);
+
+  // Blacks: additive lift/crush weighted to the lower tones (perceptual 0.45→0.0,
+  // strongest near black), setting the black point. It fades to zero by the
+  // midtones so it doesn't wash the whole image grey. +blacks lifts blacks toward
+  // grey, -blacks deepens them (the standard convention). Additive because a
+  // multiply near zero barely moves a near-black value.
+  float blackWeight = 1.0 - smoothstep(0.0, 0.45, pl);
+  c += u_blacks * blackWeight;
 
   // 6. Color adjustments (Saturation and Vibrance) in linear space
   if (u_saturation != 0.0 || u_vibrance != 0.0) {
@@ -312,9 +362,11 @@ void main() {
   //    highlights). Applied in linear light, after exposure.
   c = (c - MIDDLE_GREY) * u_contrast + MIDDLE_GREY;
 
-  // 8. Display transform — linear → sRGB. The last SCENE-referred step; the two
-  //    below are output-referred and intentionally run after it.
-  vec3 srgb = linearToSrgb(c);
+  // 8. Display transform — scene-linear → display. Either a plain sRGB encode or,
+  //    when u_filmic is on, an ACES filmic curve (adds contrast + highlight
+  //    rolloff). The last SCENE-referred step; the ops below are output-referred
+  //    and intentionally run after it.
+  vec3 srgb = (u_filmic > 0.5) ? filmicDisplay(c) : linearToSrgb(c);
 
   // 9. Luminance — perceptual HSL lightness shift, applied on display-encoded
   //    values (after sRGB) so it behaves perceptually rather than in linear.
@@ -329,5 +381,22 @@ void main() {
   if (u_grainStrength > 0.0) {
     srgb = applyGrain(uv, srgb);
   }
+
+  // Focus peaking — a VIEW aid, never baked into export (the export renderer
+  // leaves u_peaking at 0). Overlays PEAK_COLOR where the local luminance
+  // gradient (i.e. in-focus sharpness) is high. Central differences on the
+  // source texture's luma: cheap (4 taps) and only when enabled.
+  if (u_peaking > 0.0) {
+    vec2 texel = 1.0 / vec2(textureSize(u_image, 0));
+    vec3 lw = vec3(0.299, 0.587, 0.114);
+    float lL = dot(texture(u_image, uv - vec2(texel.x, 0.0)).rgb, lw);
+    float lR = dot(texture(u_image, uv + vec2(texel.x, 0.0)).rgb, lw);
+    float lU = dot(texture(u_image, uv - vec2(0.0, texel.y)).rgb, lw);
+    float lD = dot(texture(u_image, uv + vec2(0.0, texel.y)).rgb, lw);
+    float edge = length(vec2(lR - lL, lD - lU));
+    float m = smoothstep(PEAK_LO, PEAK_HI, edge);
+    srgb = mix(srgb, PEAK_COLOR, m);
+  }
+
   fragColor = vec4(srgb, 1.0);
 }

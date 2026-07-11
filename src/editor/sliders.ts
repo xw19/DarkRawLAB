@@ -56,6 +56,11 @@ export const SLIDERS: readonly SliderSpec[] = [
   // Highlights/shadows: -100..100 → ±1.5 stops of local exposure.
   { key: "highlights", inputId: "highlights", labelId: "highlights-val", uniform: "u_highlights", default: 0, toUniform: scale(1.5), format: signed },
   { key: "shadows", inputId: "shadows", labelId: "shadows-val", uniform: "u_shadows", default: 0, toUniform: scale(1.5), format: signed },
+  // Whites: gain on the extreme highlights (±1 stop). Blacks: linear lift/crush
+  // of the extreme shadows (±0.05); small because a little goes a long way at the
+  // bottom of the range.
+  { key: "whites", inputId: "whites", labelId: "whites-val", uniform: "u_whites", default: 0, toUniform: scale(1), format: signed },
+  { key: "blacks", inputId: "blacks", labelId: "blacks-val", uniform: "u_blacks", default: 0, toUniform: scale(0.05), format: signed },
 
   // Geometry. rotation90 is button-driven and has no visible label.
   { key: "angleDeg", inputId: "rotate-slider", labelId: "rotate-val", uniform: "u_angle", default: 0, toUniform: deg2rad, format: signedDeg },

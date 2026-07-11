@@ -23,6 +23,10 @@ export interface EditState {
   highlights: number;
   /** Shadows adjustment, -100..+100. 0 = no change. */
   shadows: number;
+  /** Whites adjustment (white point), -100..+100. 0 = no change. */
+  whites: number;
+  /** Blacks adjustment (black point), -100..+100. 0 = no change. */
+  blacks: number;
   /** Rotation angle in degrees, -45..+45. 0 = no change. */
   angleDeg: number;
   /** Discrete 90-degree rotation step, 0 = 0, 1 = 90 CW, 2 = 180, 3 = 270 CW. */
@@ -66,6 +70,10 @@ export interface PipelineUniforms {
   u_highlights: number;
   /** Shadows adjustment in stops, e.g. -1.5..1.5 stops. */
   u_shadows: number;
+  /** Whites gain on the brightest tones, in stops. */
+  u_whites: number;
+  /** Blacks lift/crush of the darkest tones, linear offset. */
+  u_blacks: number;
   /** Rotation angle in radians. */
   u_angle: number;
   /** Discrete 90-degree rotation step (0, 1, 2, 3). */

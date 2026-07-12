@@ -7,10 +7,25 @@ declare const ort: any;
  *  blockiness without visibly bleeding onto the background. */
 const MASK_EDGE_SOFTNESS = 3.0;
 
+/** Linear-light [0,1] → 8-bit sRGB (approx gamma 1/2.2), precomputed. Feeding
+ *  SAM its expected sRGB input over a full-size image is millions of pixels; a
+ *  lookup table avoids that many Math.pow calls so the encode prep doesn't stall
+ *  the UI thread. 4096 entries is well beyond 8-bit output precision. */
+const SRGB_LUT = (() => {
+  const lut = new Uint8ClampedArray(4096);
+  for (let i = 0; i < 4096; i++) lut[i] = Math.round(Math.pow(i / 4095, 1 / 2.2) * 255);
+  return lut;
+})();
+
 export class SamController {
   private encoderSession: any = null;
   private decoderSession: any = null;
-  private imageEmbedding: any = null;
+  // Retained copy of the encoder output (data + shape) rather than the tensor
+  // object: in proxy mode run() may transfer an input buffer into the worker and
+  // detach the main-thread copy, so we rebuild a fresh tensor from this on every
+  // decode instead of reusing one across taps.
+  private embeddingData: Float32Array | null = null;
+  private embeddingDims: number[] | null = null;
   public isLoaded = false;
   public isAnalyzing = false;
   private maskCanvas: HTMLCanvasElement | null = null;
@@ -60,6 +75,12 @@ export class SamController {
     if (typeof ort !== "undefined") {
       ort.env.wasm.numThreads = 1; // Force single-thread to bypass COOP/COEP SharedArrayBuffer restrictions
       ort.env.wasm.wasmPaths = wasmFolderPath;
+      // Run the WASM backend in ORT's own worker so session creation and the
+      // (heavy) MobileSAM encoder pass don't block the UI thread — without this
+      // single-threaded WASM inference runs on the main thread and freezes the
+      // page for the whole encode. Uses postMessage (no SharedArrayBuffer), so
+      // it stays compatible with numThreads=1 and needs no COOP/COEP headers.
+      ort.env.wasm.proxy = true;
     }
     
     const encoderUrl = new URL("mobile_sam_image_encoder.onnx", base).href;
@@ -122,8 +143,11 @@ export class SamController {
       encoderInputs[inputName] = inputTensor;
       
       const encoderOutputs = await this.encoderSession.run(encoderInputs);
-      this.imageEmbedding = encoderOutputs.image_embeddings;
-      
+      const emb = encoderOutputs.image_embeddings;
+      // Copy out so repeated decodes can rebuild fresh input tensors (see field).
+      this.embeddingData = new Float32Array(emb.data);
+      this.embeddingDims = Array.from(emb.dims);
+
       this.isAnalyzing = false;
       onStatusChange("Subject analyzed! Tap image to select area.");
     } catch (err) {
@@ -139,7 +163,7 @@ export class SamController {
     yNorm: number, // Normalized y in [0, 1] relative to the image
     isPositive = true
   ): Promise<void> {
-    if (!this.imageEmbedding || !this.decoderSession || this.imageWidth === 0 || this.imageHeight === 0) {
+    if (!this.embeddingData || !this.embeddingDims || !this.decoderSession || this.imageWidth === 0 || this.imageHeight === 0) {
       console.warn("SAM image not analyzed yet");
       return;
     }
@@ -158,7 +182,8 @@ export class SamController {
       const maskInput = new Float32Array(256 * 256);
 
       const decoderInputs = {
-        image_embeddings: this.imageEmbedding,
+        // Fresh copy each call: proxy-mode run() may transfer/detach the buffer.
+        image_embeddings: new ort.Tensor("float32", this.embeddingData.slice(), this.embeddingDims),
         point_coords: new ort.Tensor("float32", pointCoords, [1, 2, 2]),
         point_labels: new ort.Tensor("float32", pointLabels, [1, 2]),
         mask_input: new ort.Tensor("float32", maskInput, [1, 1, 256, 256]),
@@ -231,10 +256,12 @@ export class SamController {
     const pixels = img.pixels;
     for (let i = 0; i < count; i++) {
       const di = i * 4;
-      // Convert linear light to sRGB gamma 2.2 approximation
-      data[di + 0] = Math.min(255, Math.max(0, Math.round(Math.pow(pixels[di + 0]!, 1 / 2.2) * 255)));
-      data[di + 1] = Math.min(255, Math.max(0, Math.round(Math.pow(pixels[di + 1]!, 1 / 2.2) * 255)));
-      data[di + 2] = Math.min(255, Math.max(0, Math.round(Math.pow(pixels[di + 2]!, 1 / 2.2) * 255)));
+      // Convert linear light to sRGB (approx gamma 1/2.2) via LUT. Clamp the
+      // [0,1] index into the table's range defensively (values are normalised
+      // but guard against any stray out-of-range sample).
+      data[di + 0] = SRGB_LUT[Math.min(4095, Math.max(0, (pixels[di + 0]! * 4095) | 0))]!;
+      data[di + 1] = SRGB_LUT[Math.min(4095, Math.max(0, (pixels[di + 1]! * 4095) | 0))]!;
+      data[di + 2] = SRGB_LUT[Math.min(4095, Math.max(0, (pixels[di + 2]! * 4095) | 0))]!;
       data[di + 3] = 255;
     }
     origCtx.putImageData(origImgData, 0, 0);

@@ -32,6 +32,12 @@ export class SamController {
   private maskCtx: CanvasRenderingContext2D | null = null;
   private imageWidth = 0;
   private imageHeight = 0;
+  // Iterative refinement: every tap adds a point (positive = add, negative =
+  // subtract) and the decoder runs over ALL accumulated points, seeded with the
+  // previous prediction's 256x256 low-res mask so each click refines the last
+  // rather than starting fresh.
+  private points: { xNorm: number; yNorm: number; label: number }[] = [];
+  private prevLowRes: Float32Array | null = null;
 
   constructor() {
     this.maskCanvas = document.createElement("canvas");
@@ -46,10 +52,18 @@ export class SamController {
   }
 
   clearMask(): void {
+    // Drop the accumulated refinement points so the next tap starts a new mask.
+    this.points = [];
+    this.prevLowRes = null;
     if (this.maskCtx && this.maskCanvas) {
       this.maskCtx.fillStyle = "black";
-      this.maskCtx.fillRect(0, 0, 256, 256);
+      this.maskCtx.fillRect(0, 0, this.maskCanvas.width, this.maskCanvas.height);
     }
+  }
+
+  /** Number of accumulated refinement points for the current mask. */
+  get pointCount(): number {
+    return this.points.length;
   }
 
   async loadModels(onStatusChange: (status: string) => void): Promise<void> {
@@ -128,6 +142,8 @@ export class SamController {
 
     this.imageWidth = img.width;
     this.imageHeight = img.height;
+    this.points = []; // new image → start refinement over
+    this.prevLowRes = null;
     this.isAnalyzing = true;
     onStatusChange("Analyzing subject (one-time)...");
 
@@ -168,37 +184,57 @@ export class SamController {
       return;
     }
 
+    // Accumulate this click, then predict from the full point set.
+    this.points.push({ xNorm, yNorm, label: isPositive ? 1 : 0 });
+
     try {
       const longSide = Math.max(this.imageWidth, this.imageHeight);
       const scale = 1024 / longSide;
-      const clickX = xNorm * this.imageWidth * scale;
-      const clickY = yNorm * this.imageHeight * scale;
+      const n = this.points.length;
 
-      // Standard SAM ONNX models require a second padding point with label -1 if no box is used
-      const pointCoords = new Float32Array([clickX, clickY, 0.0, 0.0]);
-      const pointLabels = new Float32Array([isPositive ? 1.0 : 0.0, -1.0]);
+      // All accumulated points, plus a trailing padding point ([0,0], label -1)
+      // that SAM's ONNX export requires when no box prompt is supplied.
+      const pointCoords = new Float32Array((n + 1) * 2);
+      const pointLabels = new Float32Array(n + 1);
+      for (let i = 0; i < n; i++) {
+        const p = this.points[i]!;
+        pointCoords[i * 2] = p.xNorm * this.imageWidth * scale;
+        pointCoords[i * 2 + 1] = p.yNorm * this.imageHeight * scale;
+        pointLabels[i] = p.label;
+      }
+      pointCoords[n * 2] = 0;
+      pointCoords[n * 2 + 1] = 0;
+      pointLabels[n] = -1;
 
-      // Zero-filled low-res mask input (256x256)
-      const maskInput = new Float32Array(256 * 256);
+      // Seed with the previous prediction's low-res mask so this click refines it.
+      // The mask_input slot is a fixed 256x256; only feed a prior mask of that size.
+      const usePrev = this.prevLowRes !== null && this.prevLowRes.length === 256 * 256;
+      const maskInput = usePrev ? this.prevLowRes!.slice() : new Float32Array(256 * 256);
 
       const decoderInputs = {
         // Fresh copy each call: proxy-mode run() may transfer/detach the buffer.
         image_embeddings: new ort.Tensor("float32", this.embeddingData.slice(), this.embeddingDims),
-        point_coords: new ort.Tensor("float32", pointCoords, [1, 2, 2]),
-        point_labels: new ort.Tensor("float32", pointLabels, [1, 2]),
+        point_coords: new ort.Tensor("float32", pointCoords, [1, n + 1, 2]),
+        point_labels: new ort.Tensor("float32", pointLabels, [1, n + 1]),
         mask_input: new ort.Tensor("float32", maskInput, [1, 1, 256, 256]),
-        has_mask_input: new ort.Tensor("float32", new Float32Array([0]), [1]),
+        has_mask_input: new ort.Tensor("float32", new Float32Array([usePrev ? 1 : 0]), [1]),
         orig_im_size: new ort.Tensor("float32", new Float32Array([this.imageHeight, this.imageWidth]), [2]),
       };
 
       const outputs = await this.decoderSession.run(decoderInputs);
-      const masksOutput = outputs[this.decoderSession.outputNames[0] || "masks"];
-      const logits = masksOutput.data as Float32Array;
+      const masksOutput = outputs["masks"] ?? outputs[this.decoderSession.outputNames[0]];
+      // Retain the 256x256 low-res mask to seed the next refinement click.
+      const lowRes = outputs["low_res_masks"];
+      if (lowRes && lowRes.data.length === 256 * 256) {
+        this.prevLowRes = new Float32Array(lowRes.data);
+      }
 
       // Draw the output mask logits to our mask canvas dynamically matching dimensions
-      this.drawLogitsToMask(logits, masksOutput.dims);
+      this.drawLogitsToMask(masksOutput.data as Float32Array, masksOutput.dims);
     } catch (err) {
       console.error("Failed to run SAM mask decoder:", err);
+      // Roll back the point that failed so a retry isn't polluted by it.
+      this.points.pop();
     }
   }
 

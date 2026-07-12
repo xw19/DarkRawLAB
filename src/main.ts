@@ -439,6 +439,22 @@ const samClearBtn = document.querySelector<HTMLButtonElement>("#sam-clear-btn")!
 const samSpinner = document.querySelector<SVGElement>("#sam-spinner")!;
 const samBtnText = document.querySelector<HTMLSpanElement>("#sam-btn-text")!;
 const samStatusText = document.querySelector<HTMLDivElement>("#sam-status-text")!;
+const samModeToggle = document.querySelector<HTMLDivElement>("#sam-mode-toggle")!;
+const samModeAdd = document.querySelector<HTMLButtonElement>("#sam-mode-add")!;
+const samModeRemove = document.querySelector<HTMLButtonElement>("#sam-mode-remove")!;
+
+// Refinement click mode: add = positive point (grow the mask), remove =
+// negative point (carve it back). Each tap refines the previous prediction.
+let maskClickMode: "add" | "remove" = "add";
+
+function setMaskClickMode(mode: "add" | "remove"): void {
+  maskClickMode = mode;
+  samModeAdd.classList.toggle("active", mode === "add");
+  samModeRemove.classList.toggle("active", mode === "remove");
+}
+
+samModeAdd.addEventListener("click", () => setMaskClickMode("add"));
+samModeRemove.addEventListener("click", () => setMaskClickMode("remove"));
 
 /** Reflect the current SAM prep state in the Mask panel: a spinner while the
  *  model downloads + the image is encoded, a tap prompt once ready, or a retry
@@ -450,6 +466,7 @@ function updateMaskUi(): void {
   samSpinner.toggleAttribute("hidden", !loading);
   samDetectBtn.disabled = loading;
   samDetectBtn.hidden = ready; // once ready you just tap the photo; no button needed
+  samModeToggle.hidden = !ready; // add/subtract refinement only makes sense once ready
   if (loading) {
     samBtnText.textContent = "Loading AI model…";
     samStatusText.textContent = "Preparing subject selection…";
@@ -492,6 +509,7 @@ samDetectBtn.addEventListener("click", () => {
 samClearBtn.addEventListener("click", () => {
   sam.clearMask();
   renderer.setMask(null);
+  setMaskClickMode("add");
   samStatusText.textContent = "Mask cleared. Tap on image to select any area.";
 });
 
@@ -524,10 +542,12 @@ canvas.addEventListener("click", async (e) => {
   const origX = committedCrop.x + cropU * committedCrop.w;
   const origY = committedCrop.y + cropV * committedCrop.h;
 
-  samStatusText.textContent = "Updating selection...";
-  await sam.predictMask(origX, origY);
+  samStatusText.textContent =
+    maskClickMode === "add" ? "Adding to selection…" : "Removing from selection…";
+  await sam.predictMask(origX, origY, maskClickMode === "add");
   renderer.setMask(sam.getMaskCanvas());
-  samStatusText.textContent = "Mask updated! Adjust sliders below.";
+  const n = sam.pointCount;
+  samStatusText.textContent = `Mask refined (${n} point${n === 1 ? "" : "s"}). Tap to refine, or adjust sliders.`;
 });
 resetCrop.addEventListener("click", () => {
   overlay.show(fullCrop, 0);
@@ -552,6 +572,7 @@ function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
   refreshHistoryUi();
   sam.clearMask();
   renderer.setMask(null);
+  setMaskClickMode("add");
   // Start downloading + encoding for SAM in the background so the Mask tab is
   // ready when the user gets there; no mask is selected until they tap.
   startSamPrep(image);

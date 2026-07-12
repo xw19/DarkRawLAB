@@ -47,6 +47,11 @@ const scale = (k: number) => (v: number) => (v / 100) * k;
  *  0 at 0 and exactly k at 100. */
 const logScale = (k: number, curve: number) => (v: number) =>
   v <= 0 ? 0 : (k * (Math.exp((curve * v) / 100) - 1)) / (Math.exp(curve) - 1);
+/** Mask feather: 0..100 UI → smoothstep half-width around the mask edge pivot,
+ *  [0.01, 0.5]. Never 0 — a zero-width step would alias the SAM decoder's
+ *  256px grid into stair-stepped edges; 0.01 already reads as a hard cut. At
+ *  100 the window spans the whole stored sigmoid ramp (≈ the raw SAM edge). */
+const featherWidth = (v: number) => 0.01 + (v / 100) * 0.49;
 
 // --- label formatters ------------------------------------------------------
 // Signed, fixed formatting so numbers don't jitter in width as you drag.
@@ -55,6 +60,7 @@ const percent = (v: number) => `${v}%`;
 const signedEv = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)} EV`;
 const signedDeg = (v: number) => `${v > 0 ? "+" : ""}${v}°`;
 const fixed1 = (v: number) => v.toFixed(1);
+const onOff = (v: number) => (v ? "On" : "Off");
 
 export const SLIDERS: readonly SliderSpec[] = [
   // Tone
@@ -136,4 +142,17 @@ export const SLIDERS: readonly SliderSpec[] = [
   { key: "localExposure", inputId: "local-exposure", labelId: "local-exposure-val", uniform: "u_localExposure", default: 0, toUniform: identity, format: signedEv },
   { key: "localContrast", inputId: "local-contrast", labelId: "local-contrast-val", uniform: "u_localContrast", default: 0, toUniform: pow2pct, format: signed },
   { key: "localSaturation", inputId: "local-saturation", labelId: "local-saturation-val", uniform: "u_localSaturation", default: 0, toUniform: scale(0.01), format: signed },
+  // Mask edge shaping (live in the shader, so the red overlay previews it).
+  // Feather: edge ramp width — soft blend for faces/hair, tight cut for
+  // architecture. Default 100 preserves the raw SAM edge (previous behaviour).
+  // Shift: moves the 50% contour — negative pulls the edge inside the subject
+  // (kills halos on the background), positive grows the selection. ±100 → ±0.4
+  // pivot shift, keeping the pivot within [0.1, 0.9] of the stored ramp.
+  { key: "maskFeather", inputId: "mask-feather", labelId: "mask-feather-val", uniform: "u_maskFeather", default: 100, toUniform: featherWidth, format: percent },
+  { key: "maskShift", inputId: "mask-shift", labelId: "mask-shift-val", uniform: "u_maskShift", default: 0, toUniform: scale(0.4), format: signed },
+  // Invert the selection (0/1, button-driven hidden input like rotation90):
+  // local edits apply to everything OUTSIDE the SAM subject. Inversion happens
+  // on the raw mask before the Feather/Edge reshape, so those sliders always
+  // act on the current (possibly inverted) selection.
+  { key: "maskInvert", inputId: "mask-invert", uniform: "u_maskInvert", default: 0, toUniform: identity, format: onOff },
 ];

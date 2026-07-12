@@ -33,6 +33,9 @@ uniform float u_localExposure;
 uniform float u_showMaskOverlay;
 uniform float u_localContrast;
 uniform float u_localSaturation;
+uniform float u_maskFeather; // mask edge smoothstep half-width (0.01..0.5)
+uniform float u_maskShift;   // mask edge pivot shift; + grows the selection, - shrinks it
+uniform float u_maskInvert;  // 1 = invert the selection (local edits apply outside the subject)
 uniform float u_exposure; // linear-light multiplier, 2^EV (1.0 = no change)
 uniform float u_contrast; // contrast factor around middle grey (1.0 = no change)
 uniform float u_highlights; // highlights adjustment, stops (0.0 = no change)
@@ -424,7 +427,22 @@ void main() {
 
   // Local edits (Masking)
   if (u_useMask) {
-    float maskVal = texture(u_maskTexture, uv).r;
+    // The mask texture stores a soft sigmoid ramp across the SAM edge (see
+    // drawLogitsToMask in editor/sam.ts). Re-carve it with a smoothstep window
+    // so the edge is live-tunable: u_maskFeather sets the ramp half-width
+    // (soft blend for faces ↔ tight cut for architecture) and u_maskShift
+    // moves the 50% contour (negative pulls the edge inside the subject so a
+    // strong local exposure can't halo onto the background). The clamps keep
+    // the window inside [0,1] so the subject core still reaches exactly 1 and
+    // true background stays exactly 0 after contraction/expansion.
+    float rawMask = texture(u_maskTexture, uv).r;
+    // Invert BEFORE the reshape so Feather/Edge keep their meaning relative to
+    // the current selection: Edge + always grows whatever is selected.
+    rawMask = mix(rawMask, 1.0 - rawMask, u_maskInvert);
+    float pivot = 0.5 - u_maskShift;
+    float lo = clamp(pivot - u_maskFeather, 0.0, 0.99);
+    float hi = clamp(pivot + u_maskFeather, lo + 0.01, 1.0);
+    float maskVal = smoothstep(lo, hi, rawMask);
     if (maskVal > 0.0) {
       vec3 localC = c;
       if (u_localExposure != 0.0) {

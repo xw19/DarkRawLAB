@@ -17,7 +17,7 @@ darktable itself is already FOSS; our differentiator is **mobile + web/WASM**, n
 
 **Implemented editing features** (all live on the GPU; see the pipeline below):
 
-- **Tone:** exposure, contrast, highlights, shadows, whites, blacks, sharpen, and **local adjustments** (exposure, contrast, saturation) selectively applied using a subject mask.
+- **Tone:** exposure, contrast, highlights, shadows, whites, blacks, sharpen, and **local adjustments** (exposure, contrast, saturation) selectively applied using a subject mask, with live mask edge shaping (**Feather** ramp width + **Edge** in/out shift) and an **Invert Selection** toggle (edit everything outside the subject).
 - **Colour:** white balance (temperature, tint), saturation, vibrance, luminance, channel mixer (3×3, the `mix*` fields → `u_mix*` matrix in `pipeline.frag`), and a per-hue **HSL mixer** (8 bands × Hue/Sat/Lum, the `hsl*` fields; the shader blends bands by hue distance)
 - **Denoise:** patch-based NLM **luminance** and a **colour** (chroma) bilateral, plus film grain
 - **Geometry:** crop, free-angle straighten, 90° rotation
@@ -68,7 +68,7 @@ The shader (`src/gl/shaders/pipeline.frag`) then applies operations in exactly t
 5. **White balance** — temperature scales R up / B down; tint pivots green against magenta.
 6. **Highlights / shadows** — luminance-weighted exposure applied to the bright/dark ends (smoothstep masks around 0.18 middle grey).
 7. **Saturation / vibrance** — mix toward luminance; vibrance is saturation weighted down for already-saturated pixels.
-8. **Local Edits (Masking)** — blends local exposure, contrast, and saturation adjustments using the active single-channel mask texture (0..1 range) before global contrast.
+8. **Local Edits (Masking)** — blends local exposure, contrast, and saturation adjustments using the active single-channel mask texture (0..1 range) before global contrast. The mask texture stores a soft sigmoid ramp across the SAM edge (`drawLogitsToMask` in `sam.ts`); the shader re-carves it live with a smoothstep window — **Feather** (`u_maskFeather`, half-width 0.01..0.5) sets the edge ramp width (soft for faces, tight for architecture) and **Edge** (`u_maskShift`, ±0.4 pivot shift) moves the boundary in/out (negative pulls it inside the subject so strong local exposure can't halo onto the background). **Invert** (`u_maskInvert`, 0/1, a button-driven hidden input like `rotation90`) flips the raw mask *before* the reshape so Feather/Edge always act on the current selection; Clear Mask resets it.
 9. **Contrast** — tone curve pivoting around middle grey (0.18 linear): `rgb = (rgb - 0.18) * contrast + 0.18`. After exposure.
 
 **Display transform:**

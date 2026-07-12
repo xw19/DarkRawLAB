@@ -22,6 +22,7 @@ describe("SLIDERS-derived state", () => {
     "hslHuePurple", "hslSatPurple", "hslLumPurple", "hslHueMagenta", "hslSatMagenta", "hslLumMagenta",
     "denoiseLuma", "denoiseChroma", "grainStrength", "grainSize", "sharpen",
     "localExposure", "localContrast", "localSaturation",
+    "maskFeather", "maskShift", "maskInvert",
   ];
 
   it("gives defaultEditState exactly the EditState fields", () => {
@@ -123,6 +124,27 @@ describe("toUniforms", () => {
     it("scales grain strength to 0..0.10 and passes grain size through", () => {
       expect(toUniforms(state({ grainStrength: 100 })).u_grainStrength).toBeCloseTo(0.1);
       expect(toUniforms(state({ grainSize: 7 })).u_grainSize).toBe(7);
+    });
+  });
+
+  describe("mask edge shaping", () => {
+    it("defaults to the full-width feather (raw SAM edge) and centred pivot", () => {
+      const u = toUniforms(defaultEditState);
+      expect(u.u_maskFeather).toBeCloseTo(0.5);
+      expect(u.u_maskShift).toBe(0);
+    });
+    it("maps feather 0..100 onto half-width 0.01..0.5 (never a hard step)", () => {
+      expect(toUniforms(state({ maskFeather: 0 })).u_maskFeather).toBeCloseTo(0.01);
+      expect(toUniforms(state({ maskFeather: 50 })).u_maskFeather).toBeCloseTo(0.255);
+      expect(toUniforms(state({ maskFeather: 100 })).u_maskFeather).toBeCloseTo(0.5);
+    });
+    it("maps edge shift ±100 onto a ±0.4 pivot shift", () => {
+      expect(toUniforms(state({ maskShift: 100 })).u_maskShift).toBeCloseTo(0.4);
+      expect(toUniforms(state({ maskShift: -100 })).u_maskShift).toBeCloseTo(-0.4);
+    });
+    it("passes the invert flag through (0 = off by default, 1 = inverted)", () => {
+      expect(toUniforms(defaultEditState).u_maskInvert).toBe(0);
+      expect(toUniforms(state({ maskInvert: 1 })).u_maskInvert).toBe(1);
     });
   });
 });

@@ -398,6 +398,12 @@
       #panel-mask[data-active-param="local-saturation"] .mask-control-wrapper[data-param="local-saturation"] {
         display: flex;
       }
+      #panel-mask[data-active-param="mask-feather"] .mask-control-wrapper[data-param="mask-feather"] {
+        display: flex;
+      }
+      #panel-mask[data-active-param="mask-shift"] .mask-control-wrapper[data-param="mask-shift"] {
+        display: flex;
+      }
 
       .color-active-control {
         flex: 1 0 auto;
@@ -1747,6 +1753,7 @@
               <div class="mask-active-control">
                 <!-- Mask Action Selection -->
                 <div class="mask-control-wrapper" data-param="mask-selection">
+                  <input type="hidden" id="mask-invert" value="0" />
                   <div class="control-header">
                     <span style="font-weight:600; font-size:11px; text-transform:uppercase; color:#999; letter-spacing:0.05em;">Select Subject Mask</span>
                   </div>
@@ -1761,6 +1768,7 @@
                       <button type="button" id="sam-mode-add" class="sam-mode active" style="flex:1;">+ Add</button>
                       <button type="button" id="sam-mode-remove" class="sam-mode" style="flex:1;">− Remove</button>
                     </div>
+                    <button type="button" id="sam-invert-btn" class="sam-mode" style="width:100%; height:40px; font-weight:600;">Invert Selection</button>
                     <button type="button" id="sam-clear-btn" style="width:100%; height:40px; font-weight:600;">Clear Mask</button>
                     <div id="sam-status-text" style="font-size:12px; color:#888; text-align:center; margin-top:4px; line-height:1.4;">Tap on the photo to select any specific area.</div>
                   </div>
@@ -1798,6 +1806,28 @@
                     <input id="local-saturation" type="range" min="-100" max="100" step="1" value="0" />
                   </div>
                 </div>
+
+                <!-- Mask Feather (edge ramp width: soft for faces, tight for architecture) -->
+                <div class="mask-control-wrapper" data-param="mask-feather">
+                  <div class="control-header">
+                    <label for="mask-feather">Feather</label>
+                    <output id="mask-feather-val">100%</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="mask-feather" type="range" min="0" max="100" step="1" value="100" />
+                  </div>
+                </div>
+
+                <!-- Mask Edge shift (negative shrinks the selection inward, positive grows it) -->
+                <div class="mask-control-wrapper" data-param="mask-shift">
+                  <div class="control-header">
+                    <label for="mask-shift">Edge</label>
+                    <output id="mask-shift-val">0</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="mask-shift" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
               </div>
 
               <!-- Slideable Submenu (Bottom) -->
@@ -1825,6 +1855,20 @@
                     <path d="M12.24 10.285V4.4h1.76v5.885h-1.76zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/>
                   </svg>
                   <span>Saturation</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="mask-feather">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <circle cx="12" cy="12" r="4"/>
+                    <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.55"/>
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.25"/>
+                  </svg>
+                  <span>Feather</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="mask-shift">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12zm-9 5h3v2H3v-2zm15 0h3v2h-3v-2z"/>
+                  </svg>
+                  <span>Edge</span>
                 </button>
               </div>
             </div>

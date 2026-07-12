@@ -76,6 +76,12 @@ export interface EditState {
   localContrast: number;
   /** Local saturation adjustment, -100..100 */
   localSaturation: number;
+  /** Mask edge feather width, 0..100. 100 = softest (the raw SAM edge). */
+  maskFeather: number;
+  /** Mask edge shift, -100..100. Positive expands the selection. */
+  maskShift: number;
+  /** Invert the mask selection, 0 or 1. 1 = local edits apply outside it. */
+  maskInvert: number;
 }
 
 /** No-op edit state, built from each slider's declared default. */
@@ -148,6 +154,12 @@ export interface PipelineUniforms {
   u_localContrast: number;
   /** Local saturation factor. */
   u_localSaturation: number;
+  /** Mask edge smoothstep half-width, 0.01..0.5. */
+  u_maskFeather: number;
+  /** Mask edge pivot shift, ±0.4. Positive expands the selection. */
+  u_maskShift: number;
+  /** Mask inversion flag, 0 or 1 (applied to the raw mask before reshaping). */
+  u_maskInvert: number;
 }
 
 export function toUniforms(

@@ -55,6 +55,11 @@ const rotateSliderInput = document.querySelector<HTMLInputElement>("#rotate-slid
 const rotateLeftInput = document.querySelector<HTMLButtonElement>("#rotate-left")!;
 const rotateRightInput = document.querySelector<HTMLButtonElement>("#rotate-right")!;
 const rotation90Input = document.querySelector<HTMLInputElement>("#rotation90")!;
+// Mask inversion: button-driven hidden input (same pattern as rotation90).
+// Declared before initControls() because its onChange (which syncs the button's
+// lit state) fires synchronously during init.
+const maskInvertInput = document.querySelector<HTMLInputElement>("#mask-invert")!;
+const samInvertBtn = document.querySelector<HTMLButtonElement>("#sam-invert-btn")!;
 const exportStatus = document.querySelector<HTMLParagraphElement>("#export-status")!;
 const exportRun = document.querySelector<HTMLButtonElement>("#export-run")!;
 const aspectBtns = document.querySelectorAll<HTMLButtonElement>("#aspect-presets .submenu-item");
@@ -309,6 +314,9 @@ const controls = initControls((state) => {
   }
 
   lastState = state;
+  // Keep the Invert button's lit state in sync however maskInvert changes
+  // (button tap, reset, preset load, history bypass).
+  samInvertBtn.classList.toggle("active", state.maskInvert === 1 && !bypassedKeys.has("maskInvert"));
   renderer.setEdits(toUniforms(state, bypassedKeys));
   refreshHistoryUi();
 });
@@ -368,7 +376,7 @@ const panelMix = document.querySelector<HTMLDivElement>("#panel-mix")!;
 const panelDenoise = document.querySelector<HTMLDivElement>("#panel-denoise")!;
 const panelMask = document.querySelector<HTMLDivElement>("#panel-mask")!;
 
-type MaskParam = "mask-selection" | "local-exposure" | "local-contrast" | "local-saturation";
+type MaskParam = "mask-selection" | "local-exposure" | "local-contrast" | "local-saturation" | "mask-feather" | "mask-shift";
 
 function switchMaskParam(param: MaskParam): void {
   panelMask.dataset.activeParam = param;
@@ -506,6 +514,14 @@ function setMaskClickMode(mode: "add" | "remove"): void {
 samModeAdd.addEventListener("click", () => setMaskClickMode("add"));
 samModeRemove.addEventListener("click", () => setMaskClickMode("remove"));
 
+// Invert the selection: flip the hidden input and let controls.refresh() route
+// it through EditState → uniforms like any slider (the onChange callback syncs
+// the button's lit state, so reset/presets stay consistent too).
+samInvertBtn.addEventListener("click", () => {
+  maskInvertInput.value = maskInvertInput.value === "1" ? "0" : "1";
+  controls.refresh();
+});
+
 /** Reflect the current SAM prep state in the Mask panel: a spinner while the
  *  model downloads + the image is encoded, a tap prompt once ready, or a retry
  *  button on failure. No mask is selected until the user taps. */
@@ -560,6 +576,10 @@ samClearBtn.addEventListener("click", () => {
   sam.clearMask();
   renderer.setMask(null);
   setMaskClickMode("add");
+  // A cleared mask means "no selection" — carrying inversion over to the next
+  // selection would silently target the background, so reset it here.
+  maskInvertInput.value = "0";
+  controls.refresh();
   samStatusText.textContent = "Mask cleared. Tap on image to select any area.";
 });
 

@@ -292,6 +292,12 @@
       #controls {
         flex: 0 0 30dvh;
         height: 30dvh;
+        /* Cap the panel so it stays compact on short-in-CSS-px viewports (high-DPR
+           phones): a large fixed height here eats the image stage — see the min
+           below, which used to be 280px and squeezed the photo on ~650px-tall
+           viewports. Max keeps it from ballooning (and leaving a big gap) on very
+           tall screens. */
+        max-height: 320px;
         display: flex;
         flex-direction: column;
         background: #141414;
@@ -300,7 +306,7 @@
       }
       @media (min-height: 500px) {
         #controls {
-          min-height: 280px;
+          min-height: 210px;
         }
       }
       .tool-viewport {

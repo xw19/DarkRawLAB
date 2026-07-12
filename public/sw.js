@@ -1,4 +1,4 @@
-const CACHE_NAME = "darkraw-lab-v1";
+const CACHE_NAME = "darkraw-lab-v6";
 
 // Immediately precache the shell resources
 const PRECACHE_ASSETS = [
@@ -49,8 +49,6 @@ self.addEventListener("fetch", (e) => {
           });
         }
         return networkResponse;
-      }).catch(() => {
-        // Fallback silently if offline and resource not cached
       });
 
       // Return cache immediately if available, otherwise fallback to network fetch

@@ -21,6 +21,7 @@ describe("SLIDERS-derived state", () => {
     "hslHueAqua", "hslSatAqua", "hslLumAqua", "hslHueBlue", "hslSatBlue", "hslLumBlue",
     "hslHuePurple", "hslSatPurple", "hslLumPurple", "hslHueMagenta", "hslSatMagenta", "hslLumMagenta",
     "denoiseFine", "denoiseCoarse", "denoiseChroma", "grainStrength", "grainSize", "sharpen",
+    "localExposure", "localContrast", "localSaturation",
   ];
 
   it("gives defaultEditState exactly the EditState fields", () => {

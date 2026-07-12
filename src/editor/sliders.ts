@@ -121,4 +121,9 @@ export const SLIDERS: readonly SliderSpec[] = [
   { key: "denoiseChroma", inputId: "denoise-chroma", labelId: "denoise-chroma-val", uniform: "u_denoiseChroma", default: 0, toUniform: scale(0.25), format: signed },
   { key: "grainStrength", inputId: "grain-strength", labelId: "grain-strength-val", uniform: "u_grainStrength", default: 0, toUniform: scale(0.1), format: signed },
   { key: "grainSize", inputId: "grain-size", labelId: "grain-size-val", uniform: "u_grainSize", default: 2, toUniform: identity, format: fixed1 },
+
+  // Local edits (Masking)
+  { key: "localExposure", inputId: "local-exposure", labelId: "local-exposure-val", uniform: "u_localExposure", default: 0, toUniform: identity, format: signedEv },
+  { key: "localContrast", inputId: "local-contrast", labelId: "local-contrast-val", uniform: "u_localContrast", default: 0, toUniform: pow2pct, format: signed },
+  { key: "localSaturation", inputId: "local-saturation", labelId: "local-saturation-val", uniform: "u_localSaturation", default: 0, toUniform: scale(0.01), format: signed },
 ];

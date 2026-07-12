@@ -25,6 +25,7 @@ import { loadRaw } from "./worker/decode";
 import type { DecodedImage, RawMeta } from "./worker/decode";
 import { serializePreset, parsePreset } from "./editor/preset";
 import { Histogram } from "./ui/histogram";
+import { SamController } from "./editor/sam";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const viewContainer = document.querySelector<HTMLDivElement>("#view-container")!;
@@ -41,8 +42,12 @@ const tabCrop = document.querySelector<HTMLButtonElement>("#tab-crop")!;
 const tabColor = document.querySelector<HTMLButtonElement>("#tab-color")!;
 const tabDenoise = document.querySelector<HTMLButtonElement>("#tab-denoise")!;
 const tabMix = document.querySelector<HTMLButtonElement>("#tab-mix")!;
+const tabMask = document.querySelector<HTMLButtonElement>("#tab-mask")!;
 const controlsContainer = document.querySelector<HTMLDivElement>("#controls")!;
 const resetCrop = document.querySelector<HTMLButtonElement>("#reset-crop")!;
+
+let currentDecodedImage: DecodedImage | null = null;
+const sam = new SamController();
 const exportBtn = document.querySelector<HTMLButtonElement>("#export")!;
 // The adjustment sliders are wired entirely from the SLIDERS table via
 // initControls(); main only needs the rotate controls it drives directly.
@@ -263,6 +268,7 @@ const controls = initControls((state) => {
 let committedCrop: CropRect = fullCrop;
 let cropMode = false;
 let currentFile: File | null = null;
+let currentMeta: RawMeta | null = null;
 const overlay = new CropOverlay(canvas, () => {});
 
 function enterCropMode(): void {
@@ -278,11 +284,15 @@ function exitCropMode(): void {
   renderer.setCrop(committedCrop);
 }
 
-function switchTab(tab: "tune" | "crop" | "color" | "denoise" | "mix"): void {
+function switchTab(tab: "tune" | "crop" | "color" | "denoise" | "mix" | "mask"): void {
   controlsContainer.dataset.activeTab = tab;
-  for (const btn of [tabTune, tabCrop, tabColor, tabDenoise, tabMix]) {
+  for (const btn of [tabTune, tabCrop, tabColor, tabDenoise, tabMix, tabMask]) {
     btn.classList.toggle("active", btn.id === `tab-${tab}`);
   }
+  
+  // Toggle the red selection overlay when in the Mask tab
+  renderer.setMaskOverlay(tab === "mask");
+
   // Auto crop toggle: enter crop mode only when selecting Crop tab; commit & exit
   // crop mode as soon as you toggle away to another tab.
   if (tab === "crop" && !cropMode) {
@@ -296,10 +306,21 @@ const tuneSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-tu
 const colorSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-color .submenu-item");
 const mixSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-mix .submenu-item");
 const denoiseSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-denoise .submenu-item");
+const maskSubmenuItems = document.querySelectorAll<HTMLButtonElement>("#panel-mask .submenu-item");
 const panelTune = document.querySelector<HTMLDivElement>("#panel-tune")!;
 const panelColor = document.querySelector<HTMLDivElement>("#panel-color")!;
 const panelMix = document.querySelector<HTMLDivElement>("#panel-mix")!;
 const panelDenoise = document.querySelector<HTMLDivElement>("#panel-denoise")!;
+const panelMask = document.querySelector<HTMLDivElement>("#panel-mask")!;
+
+type MaskParam = "mask-selection" | "local-exposure" | "local-contrast" | "local-saturation";
+
+function switchMaskParam(param: MaskParam): void {
+  panelMask.dataset.activeParam = param;
+  maskSubmenuItems.forEach((item) => {
+    item.classList.toggle("active", item.dataset.param === param);
+  });
+}
 
 type TuneParam = "exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks" | "sharpen";
 
@@ -352,6 +373,13 @@ colorSubmenuItems.forEach((btn) => {
   });
 });
 
+maskSubmenuItems.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const param = btn.dataset.param as MaskParam;
+    if (param) switchMaskParam(param);
+  });
+});
+
 mixSubmenuItems.forEach((btn) => {
   btn.addEventListener("click", () => {
     const param = btn.dataset.param as MixParam;
@@ -399,6 +427,84 @@ tabCrop.addEventListener("click", () => switchTab("crop"));
 tabColor.addEventListener("click", () => switchTab("color"));
 tabDenoise.addEventListener("click", () => switchTab("denoise"));
 tabMix.addEventListener("click", () => switchTab("mix"));
+tabMask.addEventListener("click", () => switchTab("mask"));
+
+const samDetectBtn = document.querySelector<HTMLButtonElement>("#sam-detect-btn")!;
+const samClearBtn = document.querySelector<HTMLButtonElement>("#sam-clear-btn")!;
+const samSpinner = document.querySelector<SVGElement>("#sam-spinner")!;
+const samBtnText = document.querySelector<HTMLSpanElement>("#sam-btn-text")!;
+const samStatusText = document.querySelector<HTMLDivElement>("#sam-status-text")!;
+
+samDetectBtn.addEventListener("click", async () => {
+  if (!currentDecodedImage) return;
+  samDetectBtn.disabled = true;
+  samSpinner.classList.remove("hidden");
+  try {
+    await sam.loadModels((status) => {
+      samStatusText.textContent = status;
+    });
+    
+    await sam.analyzeImage(currentDecodedImage, (status) => {
+      samStatusText.textContent = status;
+    });
+
+    samStatusText.textContent = "AI model loaded. Tap subject on screen to select!";
+    
+    // Default click in the center
+    const cropX = committedCrop.x + committedCrop.w / 2;
+    const cropY = committedCrop.y + committedCrop.h / 2;
+    await sam.predictMask(cropX, cropY);
+    renderer.setMask(sam.getMaskCanvas());
+  } catch (err) {
+    console.error("SAM error:", err);
+    samStatusText.textContent = "Error: model loading failed. Refresh and try again.";
+  } finally {
+    samDetectBtn.disabled = false;
+    samSpinner.classList.add("hidden");
+    samBtnText.textContent = "Select Subject (AI)";
+  }
+});
+
+samClearBtn.addEventListener("click", () => {
+  sam.clearMask();
+  renderer.setMask(null);
+  samStatusText.textContent = "Mask cleared. Tap on image to select any area.";
+});
+
+canvas.addEventListener("click", async (e) => {
+  if (controlsContainer.dataset.activeTab !== "mask" || !sam.isLoaded || sam.isAnalyzing) {
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+
+  const u = clickX / rect.width;
+  const v = clickY / rect.height;
+
+  let cropU = u;
+  let cropV = v;
+  const rot = currentEdits.rotation90;
+  if (rot === 1) {
+    cropU = v;
+    cropV = 1.0 - u;
+  } else if (rot === 2) {
+    cropU = 1.0 - u;
+    cropV = 1.0 - v;
+  } else if (rot === 3) {
+    cropU = 1.0 - v;
+    cropV = u;
+  }
+
+  const origX = committedCrop.x + cropU * committedCrop.w;
+  const origY = committedCrop.y + cropV * committedCrop.h;
+
+  samStatusText.textContent = "Updating selection...";
+  await sam.predictMask(origX, origY);
+  renderer.setMask(sam.getMaskCanvas());
+  samStatusText.textContent = "Mask updated! Adjust sliders below.";
+});
 resetCrop.addEventListener("click", () => {
   overlay.show(fullCrop, 0);
   switchAspect("free");
@@ -413,11 +519,17 @@ resetCrop.addEventListener("click", () => {
  *  button and the automation API (window.darkraw.loadRaw). */
 function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
   currentFile = file;
+  currentMeta = meta;
+  currentDecodedImage = image;
   committedCrop = fullCrop;
   switchAspect("free");
   historyList = [];
   bypassedKeys.clear();
   refreshHistoryUi();
+  sam.clearMask();
+  renderer.setMask(null);
+  const statusTxt = document.getElementById("sam-status-text");
+  if (statusTxt) statusTxt.textContent = "Tap on the photo to select any specific area.";
   controls.reset(); // sliders → defaults; also resyncs currentEdits + renderer
   zoomController.reset();
   renderer.setImage(image); // reuses the start-screen decode; no re-decode
@@ -456,7 +568,7 @@ async function runExport(options: ExportOptions): Promise<void> {
   const processingIndicator = document.getElementById("processing-indicator");
   if (processingIndicator) processingIndicator.classList.remove("hidden");
   try {
-    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn, bypassedKeys);
+    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn, bypassedKeys, sam.getMaskCanvas(), currentMeta);
     exportStatus.textContent = "Saved ✓";
   } catch (err) {
     console.error(err);
@@ -532,7 +644,7 @@ window.darkraw = {
   getPreview: (maxDim = 256) => previewDataUrl(maxDim),
   export: async (options) => {
     if (!currentFile) throw new Error("No image loaded");
-    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn, bypassedKeys);
+    await exportImage(currentFile, currentEdits, committedCrop, options, filmicOn, bypassedKeys, sam.getMaskCanvas(), currentMeta);
   },
 };
 

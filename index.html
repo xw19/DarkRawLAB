@@ -336,14 +336,23 @@
       #controls[data-active-tab="denoise"] #panel-denoise {
         display: flex;
       }
+      #controls[data-active-tab="mask"] #panel-mask {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 12px 20px 8px 20px;
+        gap: 8px;
+      }
       
-      .tune-active-control {
+      .tune-active-control,
+      .mask-active-control {
         flex: 1 0 auto;
         display: flex;
         flex-direction: column;
         width: 100%;
       }
-      .tune-control-wrapper {
+      .tune-control-wrapper,
+      .mask-control-wrapper {
         display: none;
         width: 100%;
         flex-direction: column;
@@ -369,6 +378,18 @@
         display: flex;
       }
       #panel-tune[data-active-param="sharpen"] .tune-control-wrapper[data-param="sharpen"] {
+        display: flex;
+      }
+      #panel-mask[data-active-param="mask-selection"] .mask-control-wrapper[data-param="mask-selection"] {
+        display: flex;
+      }
+      #panel-mask[data-active-param="local-exposure"] .mask-control-wrapper[data-param="local-exposure"] {
+        display: flex;
+      }
+      #panel-mask[data-active-param="local-contrast"] .mask-control-wrapper[data-param="local-contrast"] {
+        display: flex;
+      }
+      #panel-mask[data-active-param="local-saturation"] .mask-control-wrapper[data-param="local-saturation"] {
         display: flex;
       }
 
@@ -542,7 +563,8 @@
       }
       
       /* Slideable submenu styling */
-      .tune-submenu {
+      .tune-submenu,
+      .mask-submenu {
         flex: 0 0 46px;
         height: 46px;
         display: flex;
@@ -553,7 +575,8 @@
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
       }
-      .tune-submenu::-webkit-scrollbar {
+      .tune-submenu::-webkit-scrollbar,
+      .mask-submenu::-webkit-scrollbar {
         display: none;
       }
       .submenu-item {
@@ -617,7 +640,8 @@
       }
       .tune-control-wrapper.bypassed,
       .color-control-wrapper.bypassed,
-      .denoise-control-wrapper.bypassed {
+      .denoise-control-wrapper.bypassed,
+      .mask-control-wrapper.bypassed {
         opacity: 0.45;
         transition: opacity 0.2s ease;
       }
@@ -1615,6 +1639,90 @@
               </div>
             </div>
 
+            <!-- Panel 5: Mask -->
+            <div class="tool-panel" id="panel-mask" data-active-param="mask-selection">
+              <!-- Active Control (Top) -->
+              <div class="mask-active-control">
+                <!-- Mask Action Selection -->
+                <div class="mask-control-wrapper" data-param="mask-selection">
+                  <div class="control-header">
+                    <span style="font-weight:600; font-size:11px; text-transform:uppercase; color:#999; letter-spacing:0.05em;">Select Subject Mask</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px; width:100%;">
+                    <button type="button" id="sam-detect-btn" class="primary" style="width:100%; height:40px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:8px;">
+                      <svg class="spinner hidden" id="sam-spinner" viewBox="0 0 50 50" style="width:18px; height:18px; stroke:currentColor; fill:none; stroke-linecap:round;">
+                        <circle cx="25" cy="25" r="20" stroke="currentColor" stroke-width="5" stroke-dasharray="80" stroke-dashoffset="0"></circle>
+                      </svg>
+                      <span id="sam-btn-text">Select Subject (AI)</span>
+                    </button>
+                    <button type="button" id="sam-clear-btn" style="width:100%; height:40px; font-weight:600;">Clear Mask</button>
+                    <div id="sam-status-text" style="font-size:12px; color:#888; text-align:center; margin-top:4px; line-height:1.4;">Tap on the photo to select any specific area.</div>
+                  </div>
+                </div>
+
+                <!-- Local Exposure -->
+                <div class="mask-control-wrapper" data-param="local-exposure">
+                  <div class="control-header">
+                    <label for="local-exposure">Local Exposure</label>
+                    <output id="local-exposure-val">0.0 EV</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="local-exposure" type="range" min="-4" max="4" step="0.1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Local Contrast -->
+                <div class="mask-control-wrapper" data-param="local-contrast">
+                  <div class="control-header">
+                    <label for="local-contrast">Local Contrast</label>
+                    <output id="local-contrast-val">0%</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="local-contrast" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+
+                <!-- Local Saturation -->
+                <div class="mask-control-wrapper" data-param="local-saturation">
+                  <div class="control-header">
+                    <label for="local-saturation">Local Saturation</label>
+                    <output id="local-saturation-val">0%</output>
+                  </div>
+                  <div class="slider-wrapper">
+                    <input id="local-saturation" type="range" min="-100" max="100" step="1" value="0" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Slideable Submenu (Bottom) -->
+              <div class="mask-submenu">
+                <button type="button" class="submenu-item active" data-param="mask-selection">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                  </svg>
+                  <span>Select</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="local-exposure">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-5c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1V3c0-.55.45-1 1-1zm0 18c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1v-2c0-.55.45-1 1-1z"/>
+                  </svg>
+                  <span>Exposure</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="local-contrast">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/>
+                  </svg>
+                  <span>Contrast</span>
+                </button>
+                <button type="button" class="submenu-item" data-param="local-saturation">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12.24 10.285V4.4h1.76v5.885h-1.76zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/>
+                  </svg>
+                  <span>Saturation</span>
+                </button>
+              </div>
+            </div>
+
           </div>
 
           <!-- Tab Bar Navigation -->
@@ -1642,6 +1750,12 @@
                 <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
               </svg>
               <span>Denoise</span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-mask" data-target="mask">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-8 5h2c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/>
+              </svg>
+              <span>Mask</span>
             </button>
             <button type="button" class="tab-btn" id="tab-crop" data-target="crop">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">

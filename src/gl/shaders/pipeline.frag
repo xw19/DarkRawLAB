@@ -27,6 +27,12 @@ precision highp float;
 
 in vec2 v_uv;
 uniform sampler2D u_image;
+uniform bool u_useMask;
+uniform sampler2D u_maskTexture;
+uniform float u_localExposure;
+uniform float u_showMaskOverlay;
+uniform float u_localContrast;
+uniform float u_localSaturation;
 uniform float u_exposure; // linear-light multiplier, 2^EV (1.0 = no change)
 uniform float u_contrast; // contrast factor around middle grey (1.0 = no change)
 uniform float u_highlights; // highlights adjustment, stops (0.0 = no change)
@@ -413,6 +419,30 @@ void main() {
     
     float total_sat = u_saturation + vibrance_factor;
     c = mix(vec3(l), c, max(0.0, 1.0 + total_sat));
+  }
+
+  // Local edits (Masking)
+  if (u_useMask) {
+    float maskVal = texture(u_maskTexture, uv).r;
+    if (maskVal > 0.0) {
+      vec3 localC = c;
+      if (u_localExposure != 0.0) {
+        localC *= pow(2.0, u_localExposure);
+      }
+      if (u_localSaturation != 0.0) {
+        float l = dot(localC, vec3(0.2126, 0.7152, 0.0722));
+        localC = mix(vec3(l), localC, max(0.0, 1.0 + u_localSaturation));
+      }
+      if (u_localContrast != 0.0) {
+        localC = (localC - MIDDLE_GREY) * u_localContrast + MIDDLE_GREY;
+      }
+      c = mix(c, localC, maskVal);
+
+      // Visualize selected mask area with a translucent red overlay (35% opacity)
+      if (u_showMaskOverlay == 1.0) {
+        c = mix(c, vec3(1.0, 0.0, 0.0), maskVal * 0.35);
+      }
+    }
   }
 
   // 7. Contrast — expand/compress the tonal range around middle grey. Values

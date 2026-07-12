@@ -72,6 +72,12 @@ export interface EditState {
   grainSize: number;
   /** Sharpen strength, 0..100. */
   sharpen: number;
+  /** Local exposure adjustment, -4.0..4.0 EV */
+  localExposure: number;
+  /** Local contrast adjustment, -100..100 */
+  localContrast: number;
+  /** Local saturation adjustment, -100..100 */
+  localSaturation: number;
 }
 
 /** No-op edit state, built from each slider's declared default. */
@@ -140,6 +146,12 @@ export interface PipelineUniforms {
   u_grainSize: number;
   /** Sharpen strength multiplier. */
   u_sharpen: number;
+  /** Local exposure EV stops multiplier. */
+  u_localExposure: number;
+  /** Local contrast factor. */
+  u_localContrast: number;
+  /** Local saturation factor. */
+  u_localSaturation: number;
 }
 
 export function toUniforms(

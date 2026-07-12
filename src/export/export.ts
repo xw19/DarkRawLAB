@@ -8,10 +8,12 @@
 // pipeline math to drift out of sync.
 
 import { decodeRaw } from "../worker/decode";
+import type { RawMeta } from "../worker/decode";
 import { Renderer } from "../gl/renderer";
 import { toUniforms } from "../editor/pipeline";
 import type { EditState } from "../editor/pipeline";
 import type { CropRect } from "../editor/crop";
+import { embedExifIntoJpeg } from "./exif";
 
 /** Chosen output format. JPEG and PNG are supported. */
 export type ExportFormat = "jpeg" | "png";
@@ -38,6 +40,8 @@ export async function exportImage(
   options: ExportOptions,
   filmic: boolean,
   bypassedKeys?: Set<string> | Set<keyof EditState>,
+  maskCanvas?: HTMLCanvasElement | null,
+  meta?: RawMeta | null,
 ): Promise<void> {
   const bytes = await file.arrayBuffer();
   const image = await decodeRaw(bytes, { halfSize: false });
@@ -50,10 +54,17 @@ export async function exportImage(
   const renderer = new Renderer(canvas, { preserveDrawingBuffer: true });
   try {
     renderer.setImage(image);
+    renderer.setMask(maskCanvas || null);
     renderer.setEdits(toUniforms(edits, bypassedKeys));
     renderer.setCrop(crop);
     renderer.setFilmic(filmic); // match the preview's display transform
-    const blob = await canvasToBlob(canvas, options);
+    let blob = await canvasToBlob(canvas, options);
+    // Re-attach the camera EXIF (toBlob strips all metadata). JPEG only — PNG's
+    // metadata story is different and out of scope here.
+    if (meta && options.format === "jpeg") {
+      const withExif = embedExifIntoJpeg(new Uint8Array(await blob.arrayBuffer()), meta);
+      blob = new Blob([withExif], { type: MIME.jpeg });
+    }
     downloadBlob(blob, exportName(file.name, options.format));
   } finally {
     renderer.dispose();

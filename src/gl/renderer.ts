@@ -26,6 +26,9 @@ export class Renderer {
   private readonly programInfo: twgl.ProgramInfo;
   private readonly quad: twgl.BufferInfo;
   private texture: WebGLTexture | null = null;
+  private maskTexture: WebGLTexture | null = null;
+  private useMask = false;
+  private showMaskOverlay = 0;
   private edits: PipelineUniforms = toUniforms(defaultEditState);
   private crop: CropUniforms = { u_cropOrigin: [0, 0], u_cropSize: [1, 1] };
   private imageWidth = 0;
@@ -139,6 +142,32 @@ export class Renderer {
     this.render();
   }
 
+  /** Upload a mask canvas as a single-channel texture. */
+  setMask(canvas: HTMLCanvasElement | null): void {
+    const gl = this.gl;
+    if (this.maskTexture) {
+      gl.deleteTexture(this.maskTexture);
+      this.maskTexture = null;
+    }
+    if (canvas) {
+      this.maskTexture = twgl.createTexture(gl, {
+        src: canvas,
+        minMag: gl.LINEAR,
+        wrap: gl.CLAMP_TO_EDGE,
+      });
+      this.useMask = true;
+    } else {
+      this.useMask = false;
+    }
+    this.render();
+  }
+
+  /** Toggle the semi-transparent red selection overlay. */
+  setMaskOverlay(on: boolean): void {
+    this.showMaskOverlay = on ? 1 : 0;
+    this.render();
+  }
+
   /**
    * Toggle the filmic display transform. A rendering intent, not a view overlay:
    * the export renderer calls this too so the saved file matches the preview.
@@ -157,6 +186,9 @@ export class Renderer {
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.quad);
     twgl.setUniforms(this.programInfo, {
       u_image: this.texture,
+      u_maskTexture: this.maskTexture || this.texture,
+      u_useMask: this.useMask ? 1 : 0,
+      u_showMaskOverlay: this.showMaskOverlay,
       u_aspect: this.canvas.width / this.canvas.height,
       u_peaking: this.peaking,
       u_filmic: this.filmic,
@@ -201,6 +233,8 @@ export class Renderer {
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.quad);
     twgl.setUniforms(this.programInfo, {
       u_image: this.texture,
+      u_maskTexture: this.maskTexture || this.texture,
+      u_useMask: this.useMask ? 1 : 0,
       u_aspect: w / h,
       u_peaking: 0, // histogram reflects the image, not the peaking overlay
       u_filmic: this.filmic, // ...but does reflect the filmic transform
@@ -226,9 +260,11 @@ export class Renderer {
   dispose(): void {
     const gl = this.gl;
     if (this.texture) gl.deleteTexture(this.texture);
+    if (this.maskTexture) gl.deleteTexture(this.maskTexture);
     if (this.sampleTex) gl.deleteTexture(this.sampleTex);
     if (this.sampleFbo) gl.deleteFramebuffer(this.sampleFbo);
     this.texture = null;
+    this.maskTexture = null;
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 }

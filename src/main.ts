@@ -21,8 +21,8 @@ import type { ExportOptions } from "./export/export";
 import { renderExif } from "./ui/exif";
 import { ZoomController } from "./ui/zoom";
 import { Drawer } from "./ui/drawer";
-import { loadRaw } from "./worker/decode";
 import type { DecodedImage, RawMeta } from "./worker/decode";
+import { loadAnyImage, isRasterImageFile } from "./worker/image";
 import { serializePreset, parsePreset } from "./editor/preset";
 import { Histogram } from "./ui/histogram";
 import { SamController } from "./editor/sam";
@@ -92,6 +92,16 @@ filmicToggle.addEventListener("change", () => {
 });
 filmicRow.append(filmicLabel, filmicToggle);
 drawer.content.append(filmicRow);
+
+/** Pick the display transform that suits the source. RAW is scene-linear, so the
+ *  ACES filmic curve renders it like darktable → on. JPEG/PNG already carry the
+ *  camera's tone curve; applying filmic again double-tone-maps them → off, so an
+ *  unedited photo renders exactly like the original. The user can still toggle it. */
+function applySourceFilmicDefault(file: File): void {
+  filmicOn = !isRasterImageFile(file);
+  filmicToggle.checked = filmicOn;
+  renderer.setFilmic(filmicOn);
+}
 
 // Focus peaking — a view aid (highlights in-focus edges). Toggled here; it's a
 // preview-only overlay in the renderer and is never baked into the export.
@@ -664,6 +674,7 @@ function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
   startSamPrep(image);
   controls.reset(); // sliders → defaults; also resyncs currentEdits + renderer
   zoomController.reset();
+  applySourceFilmicDefault(file); // RAW → filmic on; JPEG/PNG → off (already rendered)
   renderer.setImage(image); // reuses the start-screen decode; no re-decode
   statusEl.textContent = file.name;
 
@@ -687,7 +698,7 @@ initStartScreen({ onEnhance: enterEditor });
  *  already open); it's still a half-size decode, and the full-res one stays at
  *  export. */
 async function loadNewImageKeepingEdits(file: File): Promise<void> {
-  const loaded = await loadRaw(await file.arrayBuffer());
+  const loaded = await loadAnyImage(file);
   currentFile = file;
   currentMeta = loaded.meta;
   currentDecodedImage = loaded.image;
@@ -797,8 +808,10 @@ window.darkraw = {
     renderer.setCrop(p.crop);
   },
   loadRaw: async (bytes, name = "image.raw") => {
-    const loaded = await loadRaw(bytes);
-    enterEditor(new File([bytes], name), loaded.image, loaded.meta);
+    // Routes by the given name's extension, so this also loads JPEG/PNG bytes.
+    const file = new File([bytes], name);
+    const loaded = await loadAnyImage(file);
+    enterEditor(file, loaded.image, loaded.meta);
     return loaded.meta;
   },
   getPreview: (maxDim = 256) => previewDataUrl(maxDim),

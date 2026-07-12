@@ -3,7 +3,7 @@
 // half-size linear decode) is reused by the editor — "Enhance" does NOT re-run
 // the decoder.
 
-import { loadRaw } from "../worker/decode";
+import { loadAnyImage } from "../worker/image";
 import type { DecodedImage, RawMeta } from "../worker/decode";
 import { renderExif } from "./exif";
 
@@ -44,8 +44,7 @@ export function initStartScreen({ onEnhance }: StartScreenCallbacks): void {
     const finish = animateProgress(progressFill, progressLabel);
 
     try {
-      const bytes = await file.arrayBuffer();
-      const loaded = await loadRaw(bytes);
+      const loaded = await loadAnyImage(file);
       finish(true);
 
       if (lastThumbUrl) URL.revokeObjectURL(lastThumbUrl);
@@ -93,7 +92,7 @@ function animateProgress(
   const timer = window.setInterval(() => {
     width = Math.min(90, width + 7);
     fill.style.width = `${width}%`;
-    if (width > 35) label.textContent = "Decoding RAW…";
+    if (width > 35) label.textContent = "Processing image…";
   }, 180);
 
   return (success: boolean) => {

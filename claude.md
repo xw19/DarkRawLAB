@@ -13,6 +13,8 @@ Guidance for Claude Code working in this repo. Read this first, every session.
 
 A **mobile-first, browser-based RAW photo editor**, free and open source, inspired by darktable's processing-pipeline model. It runs **entirely client-side** — no backend, no upload, no server-side processing. The whole point is "open a RAW on your phone, in a browser, no install."
 
+It also opens ordinary **JPEG/PNG** photos so a non-savvy user can edit the pictures they already have. Those decode natively in the browser (`src/worker/image.ts`, no LibRaw) and are converted sRGB→linear on load so they flow through the *same* linear-light GPU pipeline; because they're already display-rendered, the **Filmic display transform defaults off** for them (applying ACES on top would double-tone-map), and the sRGB display transform then round-trips an unedited photo exactly. Detection is by extension/MIME (`isRasterImageFile`); everything else routes to LibRaw via the `loadAnyImage` dispatcher.
+
 darktable itself is already FOSS; our differentiator is **mobile + web/WASM**, not feature parity. Keep scope small and deliberate.
 
 **Implemented editing features** (all live on the GPU; see the pipeline below):
@@ -105,6 +107,7 @@ DarkRawLAB/
   src/
     worker/
       decode.ts           # libraw-wasm decode, EXIF, embedded-preview extraction; openSettings()
+      image.ts            # native JPEG/PNG decode → sRGB→linear; isRasterImageFile + loadAnyImage dispatcher
     gl/
       renderer.ts         # WebGL2 setup, texture upload, draw loop, dispose()
       shaders/

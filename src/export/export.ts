@@ -9,6 +9,7 @@
 
 import { decodeRaw } from "../worker/decode";
 import type { RawMeta } from "../worker/decode";
+import { decodeRasterImage, isRasterImageFile } from "../worker/image";
 import { Renderer } from "../gl/renderer";
 import { toUniforms } from "../editor/pipeline";
 import type { EditState } from "../editor/pipeline";
@@ -43,8 +44,12 @@ export async function exportImage(
   maskCanvas?: HTMLCanvasElement | null,
   meta?: RawMeta | null,
 ): Promise<void> {
-  const bytes = await file.arrayBuffer();
-  const image = await decodeRaw(bytes, { halfSize: false });
+  // Decode at full resolution: LibRaw for camera RAW, the browser for JPEG/PNG.
+  // Same as editing but full-size — the shared Renderer bakes identical pixels.
+  const raster = isRasterImageFile(file);
+  const image = raster
+    ? await decodeRasterImage(file, { halfSize: false })
+    : await decodeRaw(await file.arrayBuffer(), { halfSize: false });
 
   // Offscreen canvas + a throwaway renderer with preserveDrawingBuffer so
   // toBlob can read the result. setImage/setEdits/setCrop drive the identical
@@ -59,9 +64,9 @@ export async function exportImage(
     renderer.setCrop(crop);
     renderer.setFilmic(filmic); // match the preview's display transform
     let blob = await canvasToBlob(canvas, options);
-    // Re-attach the camera EXIF (toBlob strips all metadata). JPEG only — PNG's
-    // metadata story is different and out of scope here.
-    if (meta && options.format === "jpeg") {
+    // Re-attach the camera EXIF (toBlob strips all metadata). RAW + JPEG only —
+    // raster sources carry no camera EXIF here, and PNG's metadata story differs.
+    if (meta && !raster && options.format === "jpeg") {
       const withExif = embedExifIntoJpeg(new Uint8Array(await blob.arrayBuffer()), meta);
       blob = new Blob([withExif], { type: MIME.jpeg });
     }

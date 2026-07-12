@@ -1,4 +1,4 @@
-# DarkRaw Lab
+# DarkRawLAB
 
 A **mobile-first, browser-based RAW photo editor** — free, open source, and **100% client-side**. Open a RAW on your phone in a browser, edit it, and export a finished image. No upload, no backend, no install.
 
@@ -46,14 +46,14 @@ Open the printed URL — on your computer, or on a phone on the same network —
 
 ### Scripts
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Vite dev server (hosted on the LAN so you can test on a real phone) |
-| `npm run build` | Type-check (`tsc`) then build to `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm test` | Run the Vitest suite once |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run typecheck` | Type-check without emitting |
+| Command              | What it does                                                        |
+| -------------------- | ------------------------------------------------------------------- |
+| `npm run dev`        | Vite dev server (hosted on the LAN so you can test on a real phone) |
+| `npm run build`      | Type-check (`tsc`) then build to `dist/`                            |
+| `npm run preview`    | Serve the production build locally                                  |
+| `npm test`           | Run the Vitest suite once                                           |
+| `npm run test:watch` | Run tests in watch mode                                             |
+| `npm run typecheck`  | Type-check without emitting                                         |
 
 ## Deployment
 
@@ -82,4 +82,4 @@ Adjustment controls are declared once in [`src/editor/sliders.ts`](./src/editor/
 
 Original code is licensed under the **[MIT License](./LICENSE)**.
 
-RAW decoding uses **LibRaw**, which is **LGPL** (with other licensing options); its terms apply to its portion of any distribution. This project is *darktable-inspired* — it is **not** a fork or port of darktable's GPL source.
+RAW decoding uses **LibRaw**, which is **LGPL** (with other licensing options); its terms apply to its portion of any distribution. This project is _darktable-inspired_ — it is **not** a fork or port of darktable's GPL source.

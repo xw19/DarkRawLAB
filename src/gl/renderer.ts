@@ -112,7 +112,21 @@ export class Renderer {
     const isSwapped = this.edits.u_rotation90 === 1 || this.edits.u_rotation90 === 3;
     this.canvas.width = Math.max(1, Math.round(isSwapped ? this.imageHeight * crop.h : this.imageWidth * crop.w));
     this.canvas.height = Math.max(1, Math.round(isSwapped ? this.imageWidth * crop.w : this.imageHeight * crop.h));
+    this.syncDisplayAspect();
     this.render();
+  }
+
+  /**
+   * Mirror the canvas backing-store aspect onto its container so the container's
+   * box stays identical to the displayed canvas. The crop overlay positions its
+   * window as a percentage of the container while reading pointer coordinates
+   * from the canvas, so any divergence (which happened for portrait images when
+   * both fought over max-height) breaks alignment. No-op for the offscreen export
+   * renderer, whose canvas has no parent.
+   */
+  private syncDisplayAspect(): void {
+    const parent = this.canvas.parentElement;
+    if (parent) parent.style.aspectRatio = `${this.canvas.width} / ${this.canvas.height}`;
   }
 
   /**
@@ -129,6 +143,7 @@ export class Renderer {
       const cropH = this.crop.u_cropSize[1];
       this.canvas.width = Math.max(1, Math.round(isSwapped ? this.imageHeight * cropH : this.imageWidth * cropW));
       this.canvas.height = Math.max(1, Math.round(isSwapped ? this.imageWidth * cropW : this.imageHeight * cropH));
+      this.syncDisplayAspect();
     }
     this.render();
   }

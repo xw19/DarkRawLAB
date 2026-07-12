@@ -244,17 +244,26 @@
         padding: 16px;
         overflow: hidden;
       }
+      /* The container carries the image's aspect ratio (set from the canvas
+         backing store in Renderer.setCrop) and is contained within the stage by
+         the two max constraints; the canvas then fills it exactly. This keeps the
+         container box identical to the displayed canvas box, which the crop
+         overlay depends on — it positions the crop window as a percentage of the
+         container while pointer coordinates are read from the canvas. Letting the
+         canvas size itself with its own max-width/height instead lets the two
+         diverge for portrait images (the canvas overflows the container), which
+         made a 1:1 crop non-square and put the bottom edge out of reach. */
       #view-container {
         position: relative;
-        display: inline-block;
+        display: block;
         max-width: 100%;
         max-height: 100%;
         transform-origin: center center;
         touch-action: none;
       }
       #view {
-        max-width: 100%;
-        max-height: 100%;
+        width: 100%;
+        height: 100%;
         background: #000;
         border-radius: 4px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
@@ -1179,11 +1188,11 @@
         <div class="start-inner">
           <div class="logo">DarkRaw<span class="lab">LAB</span></div>
           <p class="tagline">RAW editing, right in your browser.</p>
-          <label class="file-button" for="file">Choose RAW file</label>
+          <label class="file-button" for="file">Choose a photo (RAW, JPEG, PNG)</label>
           <input
             id="file"
             type="file"
-            accept=".raw,.dng,.cr2,.cr3,.nef,.arw,.raf,.rw2,.orf,.pef,.srw,image/*"
+            accept=".raw,.dng,.cr2,.cr3,.nef,.arw,.raf,.rw2,.orf,.pef,.srw,.jpg,.jpeg,.png,image/*"
           />
           <p id="start-error" class="error" hidden></p>
 

@@ -2,6 +2,11 @@ import type { DecodedImage } from "../worker/decode";
 
 declare const ort: any;
 
+/** Sigmoid ramp width (in logit units) for feathering the mask edge in
+ *  drawLogitsToMask. Larger softens the boundary; ~3 hides the decoder's 256px
+ *  blockiness without visibly bleeding onto the background. */
+const MASK_EDGE_SOFTNESS = 3.0;
+
 export class SamController {
   private encoderSession: any = null;
   private decoderSession: any = null;
@@ -190,10 +195,16 @@ export class SamController {
     const data = imgData.data;
     const numPixels = w * h;
 
+    // Feather the edge instead of a hard binary cut. The decoder upsamples a
+    // coarse 256x256 mask, so thresholding the logits at 0 leaves stair-stepped,
+    // blocky edges — and a hard seam where the local adjustment abruptly starts.
+    // Mapping each logit through a sigmoid ramp spreads the boundary across a few
+    // pixels for a soft, naturally-blending edge. logit 0 still maps to 0.5, so
+    // the selected extent is unchanged; MASK_EDGE_SOFTNESS is the ramp width in
+    // logit units (larger = softer). The value goes in R/G/B; the shader samples .r.
     for (let i = 0; i < numPixels; i++) {
-      const logit = logits[i]!;
-      // Threshold logits at 0.0 to create a binary mask
-      const val = logit > 0.0 ? 255 : 0;
+      const alpha = 1 / (1 + Math.exp(-logits[i]! / MASK_EDGE_SOFTNESS));
+      const val = Math.round(alpha * 255);
       const di = i * 4;
       data[di + 0] = val; // R
       data[di + 1] = val; // G

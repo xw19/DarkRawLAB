@@ -138,6 +138,20 @@ historyContainer.id = "history-list";
 historyContainer.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
 drawer.content.append(historyContainer);
 
+// Reset all edits — a clean-slate action at the bottom of the menu. There's no
+// undo, so it confirms first; resetAllEdits() clears every adjustment without
+// re-decoding the image.
+const resetAllBtn = document.createElement("button");
+resetAllBtn.type = "button";
+resetAllBtn.className = "menu-reset-btn";
+resetAllBtn.textContent = "Reset all edits";
+resetAllBtn.addEventListener("click", () => {
+  if (!confirm("Reset all edits? This clears every adjustment, crop, rotation, and mask.")) return;
+  resetAllEdits();
+  drawer.close();
+});
+drawer.content.append(resetAllBtn);
+
 // Latest edit state, tracked so export can re-apply it to the full-res decode.
 let currentEdits: EditState = defaultEditState;
 let historyList: (keyof EditState)[] = [];
@@ -557,6 +571,22 @@ resetCrop.addEventListener("click", () => {
   controls.refresh(); // re-read the rotate inputs → currentEdits + renderer resync
   zoomController.reset();
 });
+
+/** Reset every edit to a clean slate WITHOUT re-decoding the image: sliders
+ *  (incl. rotate) → defaults, crop/aspect cleared, SAM mask dropped, zoom reset.
+ *  Edit history and bypassed keys clear themselves because controls.reset()
+ *  fires the onChange that recomputes them. Used by the menu "Reset all edits". */
+function resetAllEdits(): void {
+  if (cropMode) exitCropMode(); // leave the crop overlay cleanly before wiping it
+  controls.reset(); // sliders + rotate → defaults; clears history/bypass, re-renders
+  committedCrop = fullCrop;
+  switchAspect("free");
+  renderer.setCrop(fullCrop); // apply the cleared crop window
+  sam.clearMask(); // drop the subject mask + refinement points
+  renderer.setMask(null);
+  setMaskClickMode("add");
+  zoomController.reset();
+}
 
 // ---- Start screen → Editor -------------------------------------------------
 /** Load a decoded image into the editor and show it. Shared by the Enhance

@@ -113,12 +113,81 @@ export async function loadRaw(bytes: ArrayBuffer): Promise<LoadedRaw> {
     await libraw.open(new Uint8Array(bytes), openSettings(true));
 
     const md = await libraw.metadata(true);
-    const thumbnailUrl = await readThumbnailUrl(libraw);
+    let thumbnailUrl = await readThumbnailUrl(libraw);
     const image = await readImage(libraw);
+
+    if (!thumbnailUrl) {
+      thumbnailUrl = await generateFallbackThumbnail(image);
+    }
+
     const meta = toMeta(md, image.width, image.height);
     return { image, meta, thumbnailUrl };
   } finally {
     libraw.dispose();
+  }
+}
+
+async function generateFallbackThumbnail(image: DecodedImage): Promise<string | null> {
+  if (typeof document === "undefined") return null;
+  try {
+    const { width, height, pixels } = image;
+    // Downsample to a max dimension of 600px for speed and memory efficiency
+    const maxDim = 600;
+    let scale = 1;
+    if (width > maxDim || height > maxDim) {
+      scale = Math.min(maxDim / width, maxDim / height);
+    }
+    const thumbWidth = Math.round(width * scale);
+    const thumbHeight = Math.round(height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = thumbWidth;
+    canvas.height = thumbHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const imgData = ctx.createImageData(thumbWidth, thumbHeight);
+    const data = imgData.data;
+
+    for (let y = 0; y < thumbHeight; y++) {
+      const srcY = Math.floor(y / scale);
+      for (let x = 0; x < thumbWidth; x++) {
+        const srcX = Math.floor(x / scale);
+        const srcIdx = (srcY * width + srcX) * 4;
+        const destIdx = (y * thumbWidth + x) * 4;
+
+        // Extract linear-light values from the half-size decoded pixels
+        const rLinear = pixels[srcIdx] ?? 0;
+        const gLinear = pixels[srcIdx + 1] ?? 0;
+        const bLinear = pixels[srcIdx + 2] ?? 0;
+
+        // Clamp to [0, 1] range
+        const r = Math.max(0, Math.min(1, rLinear));
+        const g = Math.max(0, Math.min(1, gLinear));
+        const b = Math.max(0, Math.min(1, bLinear));
+
+        // Apply a fast gamma 2.2 approximation (power of 1 / 2.2 = 0.4545) for display
+        data[destIdx] = Math.round(Math.pow(r, 0.4545) * 255);
+        data[destIdx + 1] = Math.round(Math.pow(g, 0.4545) * 255);
+        data[destIdx + 2] = Math.round(Math.pow(b, 0.4545) * 255);
+        data[destIdx + 3] = 255;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(URL.createObjectURL(blob));
+        } else {
+          resolve(null);
+        }
+      }, "image/jpeg", 0.85);
+    });
+  } catch (err) {
+    console.error("Failed to generate fallback thumbnail", err);
+    return null;
   }
 }
 

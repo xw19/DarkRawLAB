@@ -269,6 +269,10 @@ let committedCrop: CropRect = fullCrop;
 let cropMode = false;
 let currentFile: File | null = null;
 let currentMeta: RawMeta | null = null;
+// SAM readiness for the current image. Prep (download models + encode the image)
+// kicks off in the background on Enhance; the Mask tab reflects this state.
+type SamState = "idle" | "loading" | "ready" | "error";
+let samState: SamState = "idle";
 const overlay = new CropOverlay(canvas, () => {});
 
 function enterCropMode(): void {
@@ -292,6 +296,7 @@ function switchTab(tab: "tune" | "crop" | "color" | "denoise" | "mix" | "mask"):
   
   // Toggle the red selection overlay when in the Mask tab
   renderer.setMaskOverlay(tab === "mask");
+  if (tab === "mask") updateMaskUi(); // show loader / tap-prompt for current prep state
 
   // Auto crop toggle: enter crop mode only when selecting Crop tab; commit & exit
   // crop mode as soon as you toggle away to another tab.
@@ -435,34 +440,53 @@ const samSpinner = document.querySelector<SVGElement>("#sam-spinner")!;
 const samBtnText = document.querySelector<HTMLSpanElement>("#sam-btn-text")!;
 const samStatusText = document.querySelector<HTMLDivElement>("#sam-status-text")!;
 
-samDetectBtn.addEventListener("click", async () => {
-  if (!currentDecodedImage) return;
-  samDetectBtn.disabled = true;
-  samSpinner.classList.remove("hidden");
-  try {
-    await sam.loadModels((status) => {
-      samStatusText.textContent = status;
-    });
-    
-    await sam.analyzeImage(currentDecodedImage, (status) => {
-      samStatusText.textContent = status;
-    });
-
-    samStatusText.textContent = "AI model loaded. Tap subject on screen to select!";
-    
-    // Default click in the center
-    const cropX = committedCrop.x + committedCrop.w / 2;
-    const cropY = committedCrop.y + committedCrop.h / 2;
-    await sam.predictMask(cropX, cropY);
-    renderer.setMask(sam.getMaskCanvas());
-  } catch (err) {
-    console.error("SAM error:", err);
-    samStatusText.textContent = "Error: model loading failed. Refresh and try again.";
-  } finally {
-    samDetectBtn.disabled = false;
-    samSpinner.classList.add("hidden");
-    samBtnText.textContent = "Select Subject (AI)";
+/** Reflect the current SAM prep state in the Mask panel: a spinner while the
+ *  model downloads + the image is encoded, a tap prompt once ready, or a retry
+ *  button on failure. No mask is selected until the user taps. */
+function updateMaskUi(): void {
+  const loading = samState === "loading";
+  const ready = samState === "ready";
+  const error = samState === "error";
+  samSpinner.toggleAttribute("hidden", !loading);
+  samDetectBtn.disabled = loading;
+  samDetectBtn.hidden = ready; // once ready you just tap the photo; no button needed
+  if (loading) {
+    samBtnText.textContent = "Loading AI model…";
+    samStatusText.textContent = "Preparing subject selection…";
+  } else if (ready) {
+    samStatusText.textContent = "Tap on the photo to select a subject.";
+  } else if (error) {
+    samBtnText.textContent = "Retry AI model";
+    samStatusText.textContent = "Couldn't load the AI model. Tap to retry.";
   }
+}
+
+/** Download the SAM models and encode `image`, in the background, so the Mask
+ *  tab is ready by the time the user opens it. Safe to call per image. */
+function startSamPrep(image: DecodedImage): void {
+  samState = "loading";
+  updateMaskUi();
+  // analyzeImage loads the models on first use, then runs the encoder.
+  sam
+    .analyzeImage(image, (status) => {
+      if (samState === "loading") samStatusText.textContent = status;
+    })
+    .then(() => {
+      samState = "ready";
+      updateMaskUi();
+    })
+    .catch((err) => {
+      console.error("SAM background prep failed:", err);
+      samState = "error";
+      updateMaskUi();
+    });
+}
+
+// With prep running automatically on Enhance, the button is only a retry path
+// when loading failed.
+samDetectBtn.addEventListener("click", () => {
+  if (!currentDecodedImage || samState === "loading") return;
+  startSamPrep(currentDecodedImage);
 });
 
 samClearBtn.addEventListener("click", () => {
@@ -472,7 +496,7 @@ samClearBtn.addEventListener("click", () => {
 });
 
 canvas.addEventListener("click", async (e) => {
-  if (controlsContainer.dataset.activeTab !== "mask" || !sam.isLoaded || sam.isAnalyzing) {
+  if (controlsContainer.dataset.activeTab !== "mask" || samState !== "ready") {
     return;
   }
 
@@ -528,8 +552,9 @@ function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
   refreshHistoryUi();
   sam.clearMask();
   renderer.setMask(null);
-  const statusTxt = document.getElementById("sam-status-text");
-  if (statusTxt) statusTxt.textContent = "Tap on the photo to select any specific area.";
+  // Start downloading + encoding for SAM in the background so the Mask tab is
+  // ready when the user gets there; no mask is selected until they tap.
+  startSamPrep(image);
   controls.reset(); // sliders → defaults; also resyncs currentEdits + renderer
   zoomController.reset();
   renderer.setImage(image); // reuses the start-screen decode; no re-decode

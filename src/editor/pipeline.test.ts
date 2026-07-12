@@ -20,7 +20,7 @@ describe("SLIDERS-derived state", () => {
     "hslHueYellow", "hslSatYellow", "hslLumYellow", "hslHueGreen", "hslSatGreen", "hslLumGreen",
     "hslHueAqua", "hslSatAqua", "hslLumAqua", "hslHueBlue", "hslSatBlue", "hslLumBlue",
     "hslHuePurple", "hslSatPurple", "hslLumPurple", "hslHueMagenta", "hslSatMagenta", "hslLumMagenta",
-    "denoiseFine", "denoiseCoarse", "denoiseChroma", "grainStrength", "grainSize", "sharpen",
+    "denoiseLuma", "denoiseChroma", "grainStrength", "grainSize", "sharpen",
     "localExposure", "localContrast", "localSaturation",
   ];
 
@@ -49,8 +49,7 @@ describe("toUniforms", () => {
     expect(u.u_saturation).toBe(0);
     expect(u.u_vibrance).toBe(0);
     expect(u.u_luminance).toBe(0);
-    expect(u.u_denoiseFine).toBe(0);
-    expect(u.u_denoiseCoarse).toBe(0);
+    expect(u.u_denoiseLuma).toBe(0);
     expect(u.u_denoiseChroma).toBe(0);
     expect(u.u_grainStrength).toBe(0);
     expect(u.u_grainSize).toBe(2); // default grain size, passed through
@@ -118,8 +117,7 @@ describe("toUniforms", () => {
       expect(toUniforms(state({ vibrance: -100 })).u_vibrance).toBeCloseTo(-1);
     });
     it("scales denoise bands to their per-band ceilings", () => {
-      expect(toUniforms(state({ denoiseFine: 100 })).u_denoiseFine).toBeCloseTo(0.15);
-      expect(toUniforms(state({ denoiseCoarse: 100 })).u_denoiseCoarse).toBeCloseTo(0.2);
+      expect(toUniforms(state({ denoiseLuma: 100 })).u_denoiseLuma).toBeCloseTo(0.05);
       expect(toUniforms(state({ denoiseChroma: 100 })).u_denoiseChroma).toBeCloseTo(0.25);
     });
     it("scales grain strength to 0..0.10 and passes grain size through", () => {

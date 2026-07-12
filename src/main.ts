@@ -407,7 +407,7 @@ function switchMixParam(param: MixParam): void {
   });
 }
 
-function switchDenoiseParam(param: "fine" | "coarse" | "chroma" | "grain-strength" | "grain-size"): void {
+function switchDenoiseParam(param: "luminance" | "colour" | "grain-strength" | "grain-size"): void {
   panelDenoise.dataset.activeParam = param;
   denoiseSubmenuItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.param === param);
@@ -444,7 +444,7 @@ mixSubmenuItems.forEach((btn) => {
 
 denoiseSubmenuItems.forEach((btn) => {
   btn.addEventListener("click", () => {
-    const param = btn.dataset.param as "fine" | "coarse" | "chroma" | "grain-strength" | "grain-size";
+    const param = btn.dataset.param as "luminance" | "colour" | "grain-strength" | "grain-size";
     if (param) switchDenoiseParam(param);
   });
 });
@@ -653,7 +653,7 @@ function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
   switchTuneParam("exposure");
   switchColorParam("temp");
   switchMixParam("mixR");
-  switchDenoiseParam("fine");
+  switchDenoiseParam("luminance");
   switchTab("tune");
   showScreen("editor");
 }

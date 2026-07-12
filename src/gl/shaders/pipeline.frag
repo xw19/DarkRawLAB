@@ -66,8 +66,7 @@ uniform float u_hslHueAqua; uniform float u_hslSatAqua; uniform float u_hslLumAq
 uniform float u_hslHueBlue; uniform float u_hslSatBlue; uniform float u_hslLumBlue;
 uniform float u_hslHuePurple; uniform float u_hslSatPurple; uniform float u_hslLumPurple;
 uniform float u_hslHueMagenta; uniform float u_hslSatMagenta; uniform float u_hslLumMagenta;
-uniform float u_denoiseFine;   // fine luma denoise threshold (0.0..0.15)
-uniform float u_denoiseCoarse; // coarse luma denoise threshold (0.0..0.20)
+uniform float u_denoiseLuma;   // luma denoise strength (patch-NLM filter h, 0.0..0.05)
 uniform float u_denoiseChroma; // chroma denoise threshold (0.0..0.25)
 uniform float u_grainStrength; // film grain strength (0.0..0.10)
 uniform float u_grainSize;     // film grain size (1.0..10.0)
@@ -204,78 +203,80 @@ vec3 ycbcr2rgb(vec3 c) {
   return clamp(vec3(r, g, b), 0.0, 1.0);
 }
 
-// Optimized Multi-Scale NLM Denoising Filter
+// luma() — the Y (luminance) channel of a sample, one texture fetch.
+float lumaAt(vec2 uv) {
+  return rgb2ycbcr(texture(u_image, uv).rgb).x;
+}
+
+// 5-tap plus-shaped patch (centre + 4 axis neighbours) used for the NLM patch
+// distance. A patch — rather than a single pixel — is the whole point of NLM:
+// averaging the difference over the patch cancels the per-pixel noise in the
+// similarity metric, so genuinely-similar (but noisy) neighbours score as similar
+// and get averaged, while true edges score as different and are preserved. A
+// single-pixel bilateral can't do this — for fine luma noise the per-pixel
+// difference IS the noise, so it rejects exactly the samples it should average.
+const int PATCH_N = 5;
+const vec2 PATCH[5] = vec2[5](vec2(0.0), vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0));
+
 vec3 applyDenoise(vec2 uv, vec3 centerColor) {
   vec3 centerY = rgb2ycbcr(centerColor);
-  
-  float fineWeightSum = 0.0;
-  float fineLumaSum = 0.0;
-  
-  float coarseWeightSum = 0.0;
-  float coarseLumaSum = 0.0;
-  
-  float chromaWeightSum = 0.0;
-  vec2 chromaSum = vec2(0.0);
-  
-  vec2 texelSize = 1.0 / vec2(textureSize(u_image, 0));
-  
-  // 5x5 search window for Fine Luma and Chroma
-  for (int dy = -2; dy <= 2; dy++) {
-    for (int dx = -2; dx <= 2; dx++) {
-      vec2 offset = vec2(dx, dy) * texelSize;
-      vec3 neighbor = texture(u_image, uv + offset).rgb;
-      vec3 neighborY = rgb2ycbcr(neighbor);
-      
-      float diffLuma = abs(neighborY.x - centerY.x);
-      float diffChroma = length(neighborY.yz - centerY.yz);
-      
-      if (u_denoiseFine > 0.0) {
-        float w = exp(-(diffLuma * diffLuma) / (u_denoiseFine * u_denoiseFine));
-        fineLumaSum += neighborY.x * w;
-        fineWeightSum += w;
+  vec2 texel = 1.0 / vec2(textureSize(u_image, 0));
+
+  // --- Luma: patch-based Non-Local Means over a 7x7 search window ---
+  // A wider window finds more genuinely-similar patches to average, so it denoises
+  // harder WITHOUT blurring edges (unlike a plain blur) — that's what makes NLM
+  // scale in strength. The cost is the tap count (49 window × 5 patch).
+  float finalLuma = centerY.x;
+  if (u_denoiseLuma > 0.0) {
+    float centerPatch[5];
+    for (int k = 0; k < PATCH_N; k++) centerPatch[k] = lumaAt(uv + PATCH[k] * texel);
+
+    float h2 = u_denoiseLuma * u_denoiseLuma; // filtering strength (larger = smoother)
+    float lumaSum = 0.0;
+    float weightSum = 0.0;
+    for (int dy = -3; dy <= 3; dy++) {
+      for (int dx = -3; dx <= 3; dx++) {
+        vec2 noff = vec2(dx, dy) * texel;
+        // Mean squared luma difference between the centre patch and this
+        // neighbour's patch. The k==0 tap is the neighbour's own luma, reused
+        // below so we don't fetch it twice.
+        float dist = 0.0;
+        float neighborLuma = 0.0;
+        for (int k = 0; k < PATCH_N; k++) {
+          float nl = lumaAt(uv + noff + PATCH[k] * texel);
+          if (k == 0) neighborLuma = nl;
+          float d = nl - centerPatch[k];
+          dist += d * d;
+        }
+        dist /= float(PATCH_N);
+        float w = exp(-dist / h2);
+        lumaSum += neighborLuma * w;
+        weightSum += w;
       }
-      
-      if (u_denoiseChroma > 0.0) {
+    }
+    if (weightSum > 0.0) finalLuma = lumaSum / weightSum;
+  }
+
+  // --- Chroma: single-pixel bilateral over a 5x5 window ---
+  // Colour noise is low-frequency (large blotches), so neighbouring chroma is
+  // already similar and a patch metric buys nothing — a plain bilateral crushes
+  // it cheaply without touching luminance detail.
+  vec2 finalChroma = centerY.yz;
+  if (u_denoiseChroma > 0.0) {
+    float chromaWeightSum = 0.0;
+    vec2 chromaSum = vec2(0.0);
+    for (int dy = -2; dy <= 2; dy++) {
+      for (int dx = -2; dx <= 2; dx++) {
+        vec3 neighborY = rgb2ycbcr(texture(u_image, uv + vec2(dx, dy) * texel).rgb);
+        float diffChroma = length(neighborY.yz - centerY.yz);
         float w = exp(-(diffChroma * diffChroma) / (u_denoiseChroma * u_denoiseChroma));
         chromaSum += neighborY.yz * w;
         chromaWeightSum += w;
       }
     }
+    if (chromaWeightSum > 0.0) finalChroma = chromaSum / chromaWeightSum;
   }
-  
-  // 5x5 wider search window for Coarse Luma (step size 2.5)
-  if (u_denoiseCoarse > 0.0) {
-    for (int dy = -2; dy <= 2; dy++) {
-      for (int dx = -2; dx <= 2; dx++) {
-        vec2 offset = vec2(dx, dy) * texelSize * 2.5;
-        vec3 neighbor = texture(u_image, uv + offset).rgb;
-        vec3 neighborY = rgb2ycbcr(neighbor);
-        
-        float diffLuma = abs(neighborY.x - centerY.x);
-        float w = exp(-(diffLuma * diffLuma) / (u_denoiseCoarse * u_denoiseCoarse));
-        coarseLumaSum += neighborY.x * w;
-        coarseWeightSum += w;
-      }
-    }
-  }
-  
-  float finalLuma = centerY.x;
-  if (u_denoiseFine > 0.0 && fineWeightSum > 0.0) {
-    finalLuma = fineLumaSum / fineWeightSum;
-  }
-  if (u_denoiseCoarse > 0.0 && coarseWeightSum > 0.0) {
-    if (u_denoiseFine > 0.0) {
-      finalLuma = mix(finalLuma, coarseLumaSum / coarseWeightSum, 0.5);
-    } else {
-      finalLuma = coarseLumaSum / coarseWeightSum;
-    }
-  }
-  
-  vec2 finalChroma = centerY.yz;
-  if (u_denoiseChroma > 0.0 && chromaWeightSum > 0.0) {
-    finalChroma = chromaSum / chromaWeightSum;
-  }
-  
+
   return ycbcr2rgb(vec3(finalLuma, finalChroma));
 }
 
@@ -329,7 +330,7 @@ void main() {
 
   // 2. Denoise — YCbCr NLM, in linear light right after loading and before any
   //    tonal expansion, so we filter the noise floor instead of amplifying it.
-  if (u_denoiseFine > 0.0 || u_denoiseCoarse > 0.0 || u_denoiseChroma > 0.0) {
+  if (u_denoiseLuma > 0.0 || u_denoiseChroma > 0.0) {
     c = applyDenoise(uv, c);
   }
 

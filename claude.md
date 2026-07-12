@@ -19,7 +19,7 @@ darktable itself is already FOSS; our differentiator is **mobile + web/WASM**, n
 
 - **Tone:** exposure, contrast, highlights, shadows, whites, blacks, sharpen, and **local adjustments** (exposure, contrast, saturation) selectively applied using a subject mask.
 - **Colour:** white balance (temperature, tint), saturation, vibrance, luminance, channel mixer (3×3, the `mix*` fields → `u_mix*` matrix in `pipeline.frag`), and a per-hue **HSL mixer** (8 bands × Hue/Sat/Lum, the `hsl*` fields; the shader blends bands by hue distance)
-- **Denoise:** multi-scale luma (fine + coarse) and chroma NLM, plus film grain
+- **Denoise:** patch-based NLM **luminance** and a **colour** (chroma) bilateral, plus film grain
 - **Geometry:** crop, free-angle straighten, 90° rotation
 - **Rendering:** optional **filmic** (ACES) display transform, on by default and **baked into export**, toggled from the menu (see the display-transform step below).
 - **View:** pinch/wheel zoom and pan, focus peaking, a translucent RGB histogram, an interactive Segment Anything (SAM) AI subject mask generator (running on-device via ONNX Runtime Web), and a toggleable Edit History in the slide-in drawer (`src/ui/drawer.ts`). The histogram samples the edited image via `Renderer.sampleSmall()` (a small offscreen re-render), refreshed through `Renderer.onRender`.
@@ -62,7 +62,7 @@ The shader (`src/gl/shaders/pipeline.frag`) then applies operations in exactly t
 **Scene-referred (linear light):**
 
 1. **Geometry** — free-angle rotation, then discrete 90° steps, then the crop window. Pure UV math; no pixel reprocessing. Only baked in at export.
-2. **Denoise** — multi-scale NLM on the sampled neighbourhood (fine 5×5, coarse 5×5 @ 2.5× spacing, chroma), in YCbCr. Runs first because it operates on raw sensor noise before any tonal expansion.
+2. **Denoise** — in YCbCr. **Luminance** uses patch-based Non-Local Means (7×7 search window, 5-tap plus-shaped patch); the patch distance cancels per-pixel noise in the similarity metric, so it smooths flat noise while preserving edges (unlike a single-pixel bilateral, which the noise defeats), and the wide window lets it denoise hard without blurring. **Colour** is a single-pixel chroma bilateral over a 5×5 window. Runs first because it operates on raw sensor noise before any tonal expansion.
 3. **Sharpen** — Unsharp Mask (5-tap kernel) in linear space, applied right after denoise to amplify details without amplifying sensor noise.
 4. **Exposure** — a linear multiply, `rgb *= pow(2, ev)`. Doing this before the display transform is why highlight/shadow recovery works, and the reason we decode to linear instead of editing the baked preview JPEG.
 5. **White balance** — temperature scales R up / B down; tint pivots green against magenta.
@@ -82,7 +82,7 @@ The shader (`src/gl/shaders/pipeline.frag`) then applies operations in exactly t
 
 If you change the scene-referred order (2→7) you will get subtly wrong results. The two output-referred steps (9–10) are intentionally *after* sRGB encoding — that is not a bug; document it if you touch it.
 
-Every slider — its default, its UI-unit → uniform mapping (e.g. contrast `2^(c/100)`, highlights/shadows `±1.5` stops, denoise thresholds `0..0.15/0.20/0.25`), and its label formatter — is declared once in the **`SLIDERS` table in `src/editor/sliders.ts`**. `defaultEditState` and `toUniforms()` in `src/editor/pipeline.ts` are derived from that table, so it is the single place tuning constants live.
+Every slider — its default, its UI-unit → uniform mapping (e.g. contrast `2^(c/100)`, highlights/shadows `±1.5` stops, denoise strengths `0..0.05` luma NLM (logarithmic slider) / `0..0.25` chroma), and its label formatter — is declared once in the **`SLIDERS` table in `src/editor/sliders.ts`**. `defaultEditState` and `toUniforms()` in `src/editor/pipeline.ts` are derived from that table, so it is the single place tuning constants live.
 
 ---
 
@@ -93,7 +93,7 @@ Every slider — its default, its UI-unit → uniform mapping (e.g. contrast `2^
 - **Never block the main thread.** All decoding happens in `libraw-wasm`'s worker. The UI thread only touches WebGL and DOM.
 - **WASM memory:** `libraw.dispose()` is called after every decode (`decode.ts`) to free the instance/worker promptly; assume hard caps on mobile.
 - **Touch first:** crop, straighten, zoom, and pan all use Pointer Events so mouse and touch share one path.
-- **Shader cost:** denoise is the expensive op (up to ~50 texture taps/pixel/frame across its two 5×5 windows) and it runs live during any slider drag. Keep this in mind before adding more neighbourhood-sampling effects to the live preview.
+- **Shader cost:** denoise is the expensive op — the luma patch-NLM is ~245 texture taps/pixel/frame (a 49-tap 7×7 search window × a 5-tap patch) plus a 25-tap chroma window, and it runs live during any slider drag. Keep this in mind before adding more neighbourhood-sampling effects to the live preview.
 
 ---
 
@@ -168,7 +168,7 @@ Add the field to the `EditState` interface (`pipeline.ts`) too, so the table ent
 - **Phase 3 — Crop.** Touch-friendly overlay, applied as geometry.
 - **Phase 4 — Export.** Full-res render + encode + download.
 - **Phase 5 — Export controls.** Format (JPEG/PNG) + quality slider.
-- **Extended editing (post-roadmap).** Highlights/shadows, white balance, saturation/vibrance, luminance, multi-scale denoise + grain, straighten + 90° rotation, zoom/pan, crop aspect ratio presets, unsharp mask sharpening, interactive toggleable Edit History, PWA installation / offline caching support (manifest.json + Service Worker), and interactive Segment Anything (SAM) AI subject masking with local adjustments (exposure, contrast, saturation).
+- **Extended editing (post-roadmap).** Highlights/shadows, white balance, saturation/vibrance, luminance, patch-NLM denoise (luminance + colour) + grain, straighten + 90° rotation, zoom/pan, crop aspect ratio presets, unsharp mask sharpening, interactive toggleable Edit History, PWA installation / offline caching support (manifest.json + Service Worker), and interactive Segment Anything (SAM) AI subject masking with local adjustments (exposure, contrast, saturation).
 
 **Known gaps / good next steps** (do the ones that are asked for):
 
@@ -183,7 +183,7 @@ MIT License recorded in `LICENSE`. A GitHub Pages CI workflow exists (`.github/w
 The UI is a three-screen flow (`src/ui/screens.ts` toggles `[data-screen]` sections via the `hidden` attribute):
 
 1. **Start** (`src/ui/startScreen.ts`) — DarkRawLAB wordmark; pick a RAW → progress bar → `loadRaw()` (one `open`: half-size linear image **+** EXIF **+** embedded JPEG thumbnail) → thumbnail + EXIF panel (`src/ui/exif.ts`) → **Enhance**. The half-size decode is handed to the editor as-is — **Enhance does not re-decode**.
-2. **Editor** — canvas + a tabbed control bar (order: **Tune** exposure/contrast/highlights/shadows/whites/blacks · **Color** temp/tint/saturation/vibrance/luminance · **Mix** channel mixer + per-hue HSL bands · **Denoise** fine/coarse/chroma + grain · **Crop** straighten + 90° + crop overlay). Each tab is a `#panel-*` with a `data-active-param` submenu. Pinch/wheel zoom + pan on the canvas; the slide-in drawer holds view toggles (filmic, focus peaking, histogram). **Export** button → export screen. (EXIF shows on the start screen; there is no Info tab.)
+2. **Editor** — canvas + a tabbed control bar (order: **Tune** exposure/contrast/highlights/shadows/whites/blacks · **Color** temp/tint/saturation/vibrance/luminance · **Mix** channel mixer + per-hue HSL bands · **Denoise** luminance/colour + grain · **Crop** straighten + 90° + crop overlay). Each tab is a `#panel-*` with a `data-active-param` submenu. Pinch/wheel zoom + pan on the canvas; the slide-in drawer holds view toggles (filmic, focus peaking, histogram). **Export** button → export screen. (EXIF shows on the start screen; there is no Info tab.)
 3. **Export** — format (JPEG/PNG) + quality → Download / Back.
 
 `loadRaw()` lives beside `decodeRaw()` in `src/worker/decode.ts` and shares one `openSettings()`.

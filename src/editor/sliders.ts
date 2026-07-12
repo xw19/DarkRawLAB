@@ -41,6 +41,12 @@ const pow2pct = (v: number) => Math.pow(2, v / 100);
 const deg2rad = (v: number) => (v * Math.PI) / 180;
 /** Linear scale of the -100..100 (or 0..100) UI range onto ±k. */
 const scale = (k: number) => (v: number) => (v / 100) * k;
+/** Logarithmic (exponential-response) scale of a 0..100 UI range onto [0, k]:
+ *  fine control at the low end, ramping to k at 100. `curve` sets the steepness
+ *  (higher = more low-end resolution; ~2 is a gentle log feel). Passes through
+ *  0 at 0 and exactly k at 100. */
+const logScale = (k: number, curve: number) => (v: number) =>
+  v <= 0 ? 0 : (k * (Math.exp((curve * v) / 100) - 1)) / (Math.exp(curve) - 1);
 
 // --- label formatters ------------------------------------------------------
 // Signed, fixed formatting so numbers don't jitter in width as you drag.
@@ -116,8 +122,12 @@ export const SLIDERS: readonly SliderSpec[] = [
   { key: "hslLumMagenta", inputId: "hsl-lum-magenta", labelId: "hsl-lum-magenta-val", uniform: "u_hslLumMagenta", default: 0, toUniform: scale(0.2), format: signed },
 
   // Denoise thresholds (per-band ceilings) + film grain.
-  { key: "denoiseFine", inputId: "denoise-fine", labelId: "denoise-fine-val", uniform: "u_denoiseFine", default: 0, toUniform: scale(0.15), format: signed },
-  { key: "denoiseCoarse", inputId: "denoise-coarse", labelId: "denoise-coarse-val", uniform: "u_denoiseCoarse", default: 0, toUniform: scale(0.2), format: signed },
+  // Logarithmic response onto h ∈ [0, 0.05]. The NLM weight saturates fast on the
+  // small linear-light noise floor (see patch-NLM in pipeline.frag), so a linear
+  // slider front-loads all the effect into its bottom third; the log curve spreads
+  // it evenly and gives fine control at the low end. The 0.05 ceiling gives the
+  // 7x7 window headroom to crush heavy (high-ISO) noise at the top of the slider.
+  { key: "denoiseLuma", inputId: "denoise-luma", labelId: "denoise-luma-val", uniform: "u_denoiseLuma", default: 0, toUniform: logScale(0.05, 2), format: signed },
   { key: "denoiseChroma", inputId: "denoise-chroma", labelId: "denoise-chroma-val", uniform: "u_denoiseChroma", default: 0, toUniform: scale(0.25), format: signed },
   { key: "grainStrength", inputId: "grain-strength", labelId: "grain-strength-val", uniform: "u_grainStrength", default: 0, toUniform: scale(0.1), format: signed },
   { key: "grainSize", inputId: "grain-size", labelId: "grain-size-val", uniform: "u_grainSize", default: 2, toUniform: identity, format: fixed1 },

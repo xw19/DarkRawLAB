@@ -468,13 +468,10 @@
         gap: 8px;
         margin: auto;
       }
-      #panel-denoise[data-active-param="fine"] .denoise-control-wrapper[data-param="fine"] {
+      #panel-denoise[data-active-param="luminance"] .denoise-control-wrapper[data-param="luminance"] {
         display: flex;
       }
-      #panel-denoise[data-active-param="coarse"] .denoise-control-wrapper[data-param="coarse"] {
-        display: flex;
-      }
-      #panel-denoise[data-active-param="chroma"] .denoise-control-wrapper[data-param="chroma"] {
+      #panel-denoise[data-active-param="colour"] .denoise-control-wrapper[data-param="colour"] {
         display: flex;
       }
       #panel-denoise[data-active-param="grain-strength"] .denoise-control-wrapper[data-param="grain-strength"] {
@@ -1595,35 +1592,24 @@
             </div>
 
             <!-- Panel 4: Denoise -->
-            <div class="tool-panel" id="panel-denoise" data-active-param="fine">
+            <div class="tool-panel" id="panel-denoise" data-active-param="luminance">
               <!-- Active Control (Top) -->
               <div class="denoise-active-control">
-                <!-- Fine Denoise Control -->
-                <div class="denoise-control-wrapper" data-param="fine">
+                <!-- Luminance Denoise Control (multi-scale patch NLM) -->
+                <div class="denoise-control-wrapper" data-param="luminance">
                   <div class="control-header">
-                    <label for="denoise-fine">Luma Fine Denoise</label>
-                    <output id="denoise-fine-val">0</output>
+                    <label for="denoise-luma">Luminance</label>
+                    <output id="denoise-luma-val">0</output>
                   </div>
                   <div class="slider-wrapper">
-                    <input id="denoise-fine" type="range" min="0" max="100" step="1" value="0" />
+                    <input id="denoise-luma" type="range" min="0" max="100" step="1" value="0" />
                   </div>
                 </div>
 
-                <!-- Coarse Denoise Control -->
-                <div class="denoise-control-wrapper" data-param="coarse">
+                <!-- Colour (chroma) Denoise Control -->
+                <div class="denoise-control-wrapper" data-param="colour">
                   <div class="control-header">
-                    <label for="denoise-coarse">Luma Coarse Denoise</label>
-                    <output id="denoise-coarse-val">0</output>
-                  </div>
-                  <div class="slider-wrapper">
-                    <input id="denoise-coarse" type="range" min="0" max="100" step="1" value="0" />
-                  </div>
-                </div>
-
-                <!-- Chroma Denoise Control -->
-                <div class="denoise-control-wrapper" data-param="chroma">
-                  <div class="control-header">
-                    <label for="denoise-chroma">Chroma Denoise</label>
+                    <label for="denoise-chroma">Colour</label>
                     <output id="denoise-chroma-val">0</output>
                   </div>
                   <div class="slider-wrapper">
@@ -1656,23 +1642,17 @@
 
               <!-- Slideable Submenu (Bottom) -->
               <div class="denoise-submenu">
-                <button type="button" class="submenu-item active" data-param="fine">
+                <button type="button" class="submenu-item active" data-param="luminance">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
                   </svg>
-                  <span>Fine</span>
+                  <span>Luminance</span>
                 </button>
-                <button type="button" class="submenu-item" data-param="coarse">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/>
-                  </svg>
-                  <span>Coarse</span>
-                </button>
-                <button type="button" class="submenu-item" data-param="chroma">
+                <button type="button" class="submenu-item" data-param="colour">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                     <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8l1.46 1.46C8.07 13.11 8 13.54 8 14c0 2.21 1.79 4 4 4s4-1.79 4-4c0-.46-.07-.89-.16-1.34l1.46 1.46c.83.43.7 1.79.7 2.88 0 3.31-2.69 6-6 6zm3.3-10.3l-1.42 1.42c-.52-.39-1.17-.62-1.88-.62-1.66 0-3 1.34-3 3 0 .71.23 1.36.62 1.88L8.2 14.8c-.73-.83-1.2-1.92-1.2-3.13 0-2.76 2.24-5 5-5 1.21 0 2.3.47 3.13 1.2z"/>
                   </svg>
-                  <span>Chroma</span>
+                  <span>Colour</span>
                 </button>
                 <button type="button" class="submenu-item" data-param="grain-strength">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">

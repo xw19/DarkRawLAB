@@ -60,11 +60,9 @@ export interface EditState {
   hslHueBlue: number; hslSatBlue: number; hslLumBlue: number;
   hslHuePurple: number; hslSatPurple: number; hslLumPurple: number;
   hslHueMagenta: number; hslSatMagenta: number; hslLumMagenta: number;
-  /** Fine luma denoise, 0..100. */
-  denoiseFine: number;
-  /** Coarse luma denoise, 0..100. */
-  denoiseCoarse: number;
-  /** Chroma denoise, 0..100. */
+  /** Luminance denoise strength, 0..100 (multi-scale patch-NLM). */
+  denoiseLuma: number;
+  /** Colour (chroma) denoise, 0..100. */
   denoiseChroma: number;
   /** Film grain strength, 0..100. */
   grainStrength: number;
@@ -134,10 +132,8 @@ export interface PipelineUniforms {
   u_hslHueBlue: number; u_hslSatBlue: number; u_hslLumBlue: number;
   u_hslHuePurple: number; u_hslSatPurple: number; u_hslLumPurple: number;
   u_hslHueMagenta: number; u_hslSatMagenta: number; u_hslLumMagenta: number;
-  /** Fine luma denoise threshold factor. */
-  u_denoiseFine: number;
-  /** Coarse luma denoise threshold factor. */
-  u_denoiseCoarse: number;
+  /** Luma patch-NLM filtering strength (h). */
+  u_denoiseLuma: number;
   /** Chroma denoise threshold factor. */
   u_denoiseChroma: number;
   /** Film grain strength multiplier. */

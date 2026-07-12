@@ -1,4 +1,4 @@
-const CACHE_NAME = "darkraw-lab-v6";
+const CACHE_NAME = "darkraw-lab-v7";
 
 // Immediately precache the shell resources
 const PRECACHE_ASSETS = [

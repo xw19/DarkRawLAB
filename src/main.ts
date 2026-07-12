@@ -694,11 +694,24 @@ window.darkraw = {
   },
 };
 
+// Register the offline Service Worker in PRODUCTION only. In dev its cache-first
+// strategy serves stale Vite modules (and the libraw decode worker), which
+// silently breaks HMR and RAW loading — so in dev we instead tear down any SW +
+// caches a previous prod/dev session left behind, to recover the running tab.
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    const baseUrl = import.meta.env.BASE_URL;
-    navigator.serviceWorker.register(`${baseUrl}sw.js`)
-      .then((reg) => console.log("Service Worker registered scope:", reg.scope))
-      .catch((err) => console.error("Service Worker registration failed:", err));
-  });
+  if (import.meta.env.PROD) {
+    window.addEventListener("load", () => {
+      const baseUrl = import.meta.env.BASE_URL;
+      navigator.serviceWorker.register(`${baseUrl}sw.js`)
+        .then((reg) => console.log("Service Worker registered scope:", reg.scope))
+        .catch((err) => console.error("Service Worker registration failed:", err));
+    });
+  } else {
+    navigator.serviceWorker.getRegistrations()
+      .then((regs) => regs.forEach((r) => r.unregister()))
+      .catch(() => {});
+    if (typeof caches !== "undefined") {
+      caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
+    }
+  }
 }

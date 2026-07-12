@@ -1043,10 +1043,10 @@
         accent-color: var(--yellow);
         cursor: pointer;
       }
-      /* "Reset all edits" action button at the bottom of the menu drawer. */
+      /* Action buttons at the bottom of the menu drawer. */
+      .menu-action-btn,
       .menu-reset-btn {
         width: 100%;
-        margin-top: 20px;
         padding: 12px;
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -1056,6 +1056,16 @@
         font-weight: 600;
         cursor: pointer;
         transition: all 0.2s ease;
+      }
+      .menu-action-btn {
+        margin-top: 20px;
+      }
+      .menu-action-btn:hover {
+        border-color: var(--yellow);
+        color: var(--yellow);
+      }
+      .menu-reset-btn {
+        margin-top: 10px;
       }
       .menu-reset-btn:hover {
         border-color: #a33;

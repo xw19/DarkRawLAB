@@ -138,6 +138,42 @@ historyContainer.id = "history-list";
 historyContainer.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
 drawer.content.append(historyContainer);
 
+// Open another image — pick a new RAW without leaving the editor. The current
+// edits (sliders + crop) carry over to the new photo; only the mask is dropped
+// (it's tied to the old image). Uses its own hidden input so it doesn't disturb
+// the start screen's picker.
+const openImageInput = document.createElement("input");
+openImageInput.type = "file";
+openImageInput.accept = ".raw,.dng,.cr2,.cr3,.nef,.arw,.raf,.rw2,.orf,.pef,.srw,image/*";
+openImageInput.style.display = "none";
+document.body.append(openImageInput);
+openImageInput.addEventListener("change", async () => {
+  const file = openImageInput.files?.[0];
+  openImageInput.value = ""; // let the same file be re-picked later
+  if (!file) return;
+  const indicator = document.getElementById("processing-indicator");
+  indicator?.classList.remove("hidden");
+  statusEl.textContent = "Loading…";
+  try {
+    await loadNewImageKeepingEdits(file);
+  } catch (err) {
+    console.error("Failed to open image:", err);
+    statusEl.textContent = "Could not open this image";
+  } finally {
+    indicator?.classList.add("hidden");
+  }
+});
+
+const openImageBtn = document.createElement("button");
+openImageBtn.type = "button";
+openImageBtn.className = "menu-action-btn";
+openImageBtn.textContent = "Open another image";
+openImageBtn.addEventListener("click", () => {
+  drawer.close();
+  openImageInput.click();
+});
+drawer.content.append(openImageBtn);
+
 // Reset all edits — a clean-slate action at the bottom of the menu. There's no
 // undo, so it confirms first; resetAllEdits() clears every adjustment without
 // re-decoding the image.
@@ -623,6 +659,34 @@ function enterEditor(file: File, image: DecodedImage, meta: RawMeta): void {
 }
 
 initStartScreen({ onEnhance: enterEditor });
+
+/** Decode a newly-picked RAW and swap it into the editor while KEEPING the
+ *  current edits (sliders + crop + history) so the same look carries over — a
+ *  batch-editing flow. Only the SAM mask is dropped, since it's specific to the
+ *  previous image. Unlike the start screen, this decodes here (the editor is
+ *  already open); it's still a half-size decode, and the full-res one stays at
+ *  export. */
+async function loadNewImageKeepingEdits(file: File): Promise<void> {
+  const loaded = await loadRaw(await file.arrayBuffer());
+  currentFile = file;
+  currentMeta = loaded.meta;
+  currentDecodedImage = loaded.image;
+
+  // Mask is image-specific — clear it and re-encode the new image for SAM.
+  // currentEdits, committedCrop, historyList and bypassedKeys are left intact.
+  sam.clearMask();
+  renderer.setMask(null);
+  setMaskClickMode("add");
+  startSamPrep(loaded.image);
+
+  renderer.setImage(loaded.image); // uploads the new texture; resets crop to full…
+  renderer.setCrop(committedCrop); // …so restore the persisted crop window
+  renderer.setEdits(toUniforms(currentEdits, bypassedKeys)); // re-apply persisted edits
+
+  const editorExif = document.querySelector<HTMLElement>("#editor-exif");
+  if (editorExif) renderExif(editorExif, loaded.meta);
+  statusEl.textContent = file.name;
+}
 
 // ---- Editor → Export screen ------------------------------------------------
 exportBtn.addEventListener("click", () => {
